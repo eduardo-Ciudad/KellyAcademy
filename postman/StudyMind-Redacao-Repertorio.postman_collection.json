@@ -1,0 +1,1229 @@
+{
+  "info": {
+    "_postman_id": "84068bc3-6cc5-4b00-ab19-cb69a133949e",
+    "name": "StudyMind Redação — Repertório",
+    "description": "Leitura do Repertório (issue #7): GET /macroeixos, GET /repertorios (filtros e paginação) e GET /repertorios/{codigo}.\n\nRode pelo Runner, na ordem. O setup cria um aluno novo. Os números (63 ativos, 13 macroeixos, 52 problemas) batem com o seed V8–V14; se o seed mudar, ajuste os testes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "senha",
+      "value": "senhaSegura123"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Setup",
+      "item": [
+        {
+          "name": "Cadastro aluno",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/cadastro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "cadastro"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Aluno Repertório\",\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"email\", `aluno.repertorio.${Date.now()}@teste.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login aluno",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"token\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Macroeixos",
+      "item": [
+        {
+          "name": "Macroeixos com problemas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"13 macroeixos\", () => pm.expect(body.length).to.eql(13));",
+                  "pm.test(\"52 problemas no total\", () => pm.expect(body.reduce((n, m) => n + m.problemas.length, 0)).to.eql(52));",
+                  "pm.test(\"Cada problema aponta para o próprio macroeixo\", () => body.forEach(m => m.problemas.forEach(p => pm.expect(p.macroeixo).to.eql(m.slug))));",
+                  "pm.test(\"Ordem numérica não vaza\", () => pm.expect(body[0]).to.not.have.property(\"ordem\"));",
+                  "pm.collectionVariables.set(\"macroeixoSlug\", body[0].slug);",
+                  "pm.collectionVariables.set(\"problemaSlug\", body[0].problemas[0].slug);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/macroeixos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "macroeixos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Listagem",
+      "item": [
+        {
+          "name": "Sem filtros (página 0)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const PRIVADOS = [\"id\", \"pontuacao\", \"notaVersatilidade\", \"tags\", \"tiposArgumento\", \"statusVerificacao\", \"verificadoEm\", \"ativo\"];",
+                  "pm.test(\"63 repertórios ativos\", () => pm.expect(body.totalItens).to.eql(63));",
+                  "pm.test(\"Tamanho padrão 20\", () => { pm.expect(body.tamanho).to.eql(20); pm.expect(body.itens.length).to.eql(20); });",
+                  "pm.test(\"4 páginas e tem próxima\", () => { pm.expect(body.totalPaginas).to.eql(4); pm.expect(body.temProxima).to.be.true; });",
+                  "pm.test(\"Card sem campos internos\", () => PRIVADOS.forEach(c => pm.expect(body.itens[0]).to.not.have.property(c)));",
+                  "pm.test(\"Card com os campos da issue\", () => [\"codigo\", \"nome\", \"subtitulo\", \"tipo\", \"tipoDescricao\", \"lembreNaProva\", \"saturacao\", \"riscoUso\", \"problemas\"].forEach(c => pm.expect(body.itens[0]).to.have.property(c)));",
+                  "pm.collectionVariables.set(\"codigo\", body.itens[0].codigo);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Última página",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Sobram 3 itens na página 3\", () => pm.expect(body.itens.length).to.eql(3));",
+                  "pm.test(\"Sem próxima\", () => pm.expect(body.temProxima).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?page=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "3"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Página além do fim",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Lista vazia, total mantido\", () => { const b = pm.response.json(); pm.expect(b.itens).to.be.empty; pm.expect(b.totalItens).to.eql(63); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?page=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "10"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtro por macroeixo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const slug = pm.collectionVariables.get(\"macroeixoSlug\");",
+                  "pm.test(\"Encontrou algum\", () => pm.expect(body.totalItens).to.be.above(0));",
+                  "pm.test(\"Todos têm um problema do macroeixo\", () => body.itens.forEach(r => pm.expect(r.problemas.some(p => p.macroeixo === slug)).to.be.true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?macroeixo={{macroeixoSlug}}&size=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "macroeixo",
+                  "value": "{{macroeixoSlug}}"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtro por problema",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const slug = pm.collectionVariables.get(\"problemaSlug\");",
+                  "pm.test(\"Todos têm o problema\", () => body.itens.forEach(r => pm.expect(r.problemas.some(p => p.slug === slug)).to.be.true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?problema={{problemaSlug}}&size=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "problema",
+                  "value": "{{problemaSlug}}"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtro por tipo (PERSON)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Encontrou pessoas\", () => pm.expect(body.totalItens).to.be.above(0));",
+                  "pm.test(\"Só pessoas\", () => body.itens.forEach(r => pm.expect(r.tipo).to.eql(\"PERSON\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?tipo=PERSON&size=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "PERSON"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtro por função (PROVE_PROBLEM)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Encontrou algum\", () => pm.expect(pm.response.json().totalItens).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?funcao=PROVE_PROBLEM",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "funcao",
+                  "value": "PROVE_PROBLEM"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Busca pelo nome (bourdieu)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Acha Pierre Bourdieu\", () => pm.expect(pm.response.json().itens.map(r => r.nome)).to.include(\"Pierre Bourdieu\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?q=bourdieu",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "bourdieu"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Busca sem acento (saude)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"unaccent: saude acha conteúdo com Saúde\", () => pm.expect(pm.response.json().totalItens).to.be.above(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?q=saude",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "saude"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Filtros combinados (tipo + macroeixo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const slug = pm.collectionVariables.get(\"macroeixoSlug\");",
+                  "pm.test(\"Respeita os dois filtros\", () => body.itens.forEach(r => { pm.expect(r.tipo).to.eql(\"PERSON\"); pm.expect(r.problemas.some(p => p.macroeixo === slug)).to.be.true; }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?tipo=PERSON&macroeixo={{macroeixoSlug}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "PERSON"
+                },
+                {
+                  "key": "macroeixo",
+                  "value": "{{macroeixoSlug}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Detalhe",
+      "item": [
+        {
+          "name": "Detalhe do primeiro da lista",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "const PRIVADOS = [\"id\", \"pontuacao\", \"notaVersatilidade\", \"tags\", \"tiposArgumento\", \"statusVerificacao\", \"verificadoEm\", \"ativo\"];",
+                  "pm.test(\"Mesmo código\", () => pm.expect(body.codigo).to.eql(pm.collectionVariables.get(\"codigo\")));",
+                  "pm.test(\"Ideia central e fontes\", () => { pm.expect(body.ideiaCentral).to.be.a(\"string\"); pm.expect(body.fontes).to.be.an(\"array\").that.is.not.empty; });",
+                  "pm.test(\"Sem campos internos\", () => PRIVADOS.forEach(c => pm.expect(body).to.not.have.property(c)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios/{{codigo}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios",
+                "{{codigo}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Código em minúsculas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Normaliza para REP-058\", () => pm.expect(pm.response.json().codigo).to.eql(\"REP-058\"));",
+                  "pm.test(\"Obra sem bloco de evidência\", () => pm.expect(pm.response.json().evidencia).to.be.null);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios/rep-058",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios",
+                "rep-058"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Evidência (EVD-001)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"Tipo EVIDENCE\", () => pm.expect(body.tipo).to.eql(\"EVIDENCE\"));",
+                  "pm.test(\"Bloco de evidência com tipos\", () => pm.expect(body.evidencia.tipos).to.be.an(\"array\").that.is.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios/EVD-001",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios",
+                "EVD-001"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "REP-001 (lote opcional, fora da base ativa) responde 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios/REP-001",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios",
+                "REP-001"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Inexistente (REP-999) responde 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Mensagem com o código\", () => pm.expect(pm.response.json().detail).to.include(\"REP-999\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios/REP-999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios",
+                "REP-999"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Erros de validação",
+      "item": [
+        {
+          "name": "size acima de 50",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?size=51",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "51"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "size zero",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?size=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "0"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "page negativa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?page=-1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "-1"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "page não numérica",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?page=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "abc"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Busca com mais de 100 caracteres",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"buscaLonga\", \"a\".repeat(101));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?q={{buscaLonga}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "{{buscaLonga}}"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "tipo desconhecido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Aponta o parâmetro\", () => pm.expect(pm.response.json().detail).to.include(\"tipo\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?tipo=FILME",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "tipo",
+                  "value": "FILME"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Slug de macroeixo malformado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios?macroeixo=Saude%20Publica",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ],
+              "query": [
+                {
+                  "key": "macroeixo",
+                  "value": "Saude%20Publica"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sem token responde 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repertorios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repertorios"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Macroeixos sem token responde 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/macroeixos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "macroeixos"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
