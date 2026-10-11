@@ -10,6 +10,7 @@ import eduar.studymindredacao.domain.exception.ImagemNaoReconhecidaException;
 import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
+import eduar.studymindredacao.domain.exception.RepertorioNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.TemaNaoAdicionavelException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.TranscricaoIAException;
@@ -90,7 +91,11 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler({TemaNaoEncontradoException.class, RedacaoNaoEncontradaException.class})
+    @ExceptionHandler({
+            TemaNaoEncontradoException.class,
+            RedacaoNaoEncontradaException.class,
+            RepertorioNaoEncontradoException.class
+    })
     public ProblemDetail naoEncontrado(RuntimeException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
