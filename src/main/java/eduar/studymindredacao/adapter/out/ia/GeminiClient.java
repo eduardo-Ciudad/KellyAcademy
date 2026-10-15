@@ -28,6 +28,8 @@ import java.util.function.Function;
 @Component
 class GeminiClient {
     static final int MAX_TENTATIVAS = 2;
+    /** Valores aceitos em generationConfig.thinkingConfig.thinkingLevel (Gemini 3.x). */
+    static final java.util.Set<String> NIVEIS_RACIOCINIO = java.util.Set.of("minimal", "low", "medium", "high");
     private static final Logger log = LoggerFactory.getLogger(GeminiClient.class);
 
     private final RestClient restClient;
@@ -64,13 +66,22 @@ class GeminiClient {
      * @throws GeminiException quando as tentativas acabam ou a falha não vale repetir
      */
     <T> T gerar(String modelo, double temperatura, List<GeminiParte> partes, Function<GeminiResposta, T> interpretar) {
+        return gerar(modelo, temperatura, null, partes, interpretar);
+    }
+
+    /**
+     * Igual ao {@link #gerar(String, double, List, Function)}, com o nível de raciocínio do modelo
+     * ({@code minimal}, {@code low}, {@code medium} ou {@code high}). Nulo ou vazio = padrão do modelo.
+     */
+    <T> T gerar(String modelo, double temperatura, String raciocinio, List<GeminiParte> partes,
+                Function<GeminiResposta, T> interpretar) {
         if (modelo == null || modelo.isBlank()) {
             throw new IllegalArgumentException("modelo é obrigatório");
         }
         if (partes == null || partes.isEmpty()) {
             throw new IllegalArgumentException("a requisição ao Gemini precisa de ao menos uma parte");
         }
-        String corpo = montarCorpo(partes, temperatura);
+        String corpo = montarCorpo(partes, temperatura, raciocinio);
         GeminiException ultimaFalha = null;
 
         for (int tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
@@ -104,6 +115,10 @@ class GeminiClient {
     }
 
     String montarCorpo(List<GeminiParte> partes, double temperatura) {
+        return montarCorpo(partes, temperatura, null);
+    }
+
+    String montarCorpo(List<GeminiParte> partes, double temperatura, String raciocinio) {
         ObjectNode corpo = json.createObjectNode();
         ArrayNode nos = corpo.putArray("contents")
                 .addObject()
@@ -119,9 +134,16 @@ class GeminiClient {
                         .put("data", imagem.dadosBase64());
             }
         }
-        corpo.putObject("generationConfig")
+        ObjectNode configuracao = corpo.putObject("generationConfig")
                 .put("temperature", temperatura)
                 .put("responseMimeType", "application/json");
+        if (raciocinio != null && !raciocinio.isBlank()) {
+            String nivel = raciocinio.strip().toLowerCase(java.util.Locale.ROOT);
+            if (!NIVEIS_RACIOCINIO.contains(nivel)) {
+                throw new IllegalArgumentException("nível de raciocínio inválido: " + raciocinio);
+            }
+            configuracao.putObject("thinkingConfig").put("thinkingLevel", nivel);
+        }
         return json.writeValueAsString(corpo);
     }
 }

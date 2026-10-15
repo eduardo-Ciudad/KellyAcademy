@@ -173,4 +173,28 @@ class GeminiClientTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(recebidas).isEmpty();
     }
+
+    @Test
+    void corpoSemRaciocinioNaoEnviaThinkingConfig() {
+        JsonNode corpo = JsonMapper.builder().build()
+                .readTree(client.montarCorpo(List.of(new GeminiParte.Texto("oi")), 0.3, null));
+
+        assertThat(corpo.path("generationConfig").has("thinkingConfig")).isFalse();
+    }
+
+    @Test
+    void corpoComRaciocinioEnviaThinkingLevel() {
+        JsonNode corpo = JsonMapper.builder().build()
+                .readTree(client.montarCorpo(List.of(new GeminiParte.Texto("oi")), 0.3, " Medium "));
+
+        assertThat(corpo.path("generationConfig").path("thinkingConfig").path("thinkingLevel").asString(""))
+                .isEqualTo("medium");
+    }
+
+    @Test
+    void rejeitaNivelDeRaciocinioInvalido() {
+        assertThatThrownBy(() -> client.montarCorpo(List.of(new GeminiParte.Texto("oi")), 0.3, "turbo"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("raciocínio");
+    }
 }
