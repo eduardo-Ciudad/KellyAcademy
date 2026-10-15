@@ -58,6 +58,45 @@ final class GeminiRespostas {
             }
             """;
 
+    /** Prompt v3 com evidências (#27): tipos de problema e campos estruturados por competência. */
+    static final String AVALIACAO_V3_EVIDENCIAS = """
+            {
+              "anulada": false,
+              "motivo_anulacao": null,
+              "avaliacao_por_competencia": [
+                {"competencia": "C1",
+                 "problemas": [
+                   {"tipo": "Falha estrutural", "trecho": "cabe destacar a ausência", "descricao": "falta o que"},
+                   {"tipo": "desvio", "trecho": "plano,cabe", "descricao": "falta espaço"}],
+                 "evidencias": {}, "analise": "Uma falha e um desvio.",
+                 "nota": 200, "nivel_referencia": "n1", "resumo": "r1"},
+                {"competencia": "C2", "problemas": [],
+                 "evidencias": {"repertorios": [
+                   {"referencia": "Bourdieu", "trecho": "Pierre Bourdieu estudou", "produtivo": false, "justificativa": "só mencionado"},
+                   {"referencia": "Gênio Indomável", "trecho": "Will Hunting", "produtivo": true, "justificativa": "ligado ao tema"},
+                   {"referencia": "CF art. 205", "trecho": "", "produtivo": true, "justificativa": "sem trecho"}]},
+                 "analise": "a2", "nota": 200, "nivel_referencia": "n2", "resumo": "r2"},
+                {"competencia": "C3",
+                 "problemas": [{"tipo": "lacuna", "trecho": "considerados apenas desinteressados", "descricao": "não aprofunda"}],
+                 "evidencias": {}, "analise": "a3", "nota": 200, "nivel_referencia": "n3", "resumo": "r3"},
+                {"competencia": "C4",
+                 "problemas": [
+                   {"tipo": "repetição", "trecho": "cabe destacar", "descricao": "nos dois desenvolvimentos"},
+                   {"tipo": "repeticao", "trecho": "adequado", "descricao": "4 vezes"},
+                   {"tipo": "inadequacao", "trecho": "De maneira semelhante", "descricao": "relação imprecisa"}],
+                 "evidencias": {"operadores_interparagrafos": ["Em primeiro plano", "Em segundo plano", "null", "Portanto"]},
+                 "analise": "a4", "nota": 200, "nivel_referencia": "n4", "resumo": "r4"},
+                {"competencia": "C5", "problemas": [],
+                 "evidencias": {"elementos": {"agente": "o Ministério da Educação", "ação": "promover programas",
+                                              "modo": "por meio de plataformas", "finalidade": null, "detalhamento": "null"}},
+                 "analise": "a5", "nota": 200, "nivel_referencia": "n5", "resumo": "r5"}
+              ],
+              "pontos_fortes": [],
+              "pontos_desenvolvimento": [],
+              "diagnostico": "d"
+            }
+            """;
+
     static final String AVALIACAO_ANULADA = """
             {
               "anulada": true,

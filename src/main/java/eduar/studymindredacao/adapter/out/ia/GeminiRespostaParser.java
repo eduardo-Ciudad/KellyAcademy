@@ -1,14 +1,17 @@
 package eduar.studymindredacao.adapter.out.ia;
 
 import eduar.studymindredacao.domain.model.CompetenciaAvaliada;
+import eduar.studymindredacao.domain.model.EvidenciaCompetencia;
 import eduar.studymindredacao.domain.model.ResultadoAvaliacaoIA;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,7 +70,8 @@ class GeminiRespostaParser {
                     item.path("nota").asInt(),
                     texto(item.path("nivel_referencia")),
                     texto(item.path("resumo")),
-                    problemas
+                    problemas,
+                    evidenciaDaCompetencia(numero, item)
             ));
         }
         return competencias;
@@ -98,6 +102,99 @@ class GeminiRespostaParser {
             }
         }
         return itens;
+    }
+
+    /**
+     * Prompt v3 (#27): conta os tipos de problema e as evidências estruturadas da competência.
+     * Campo ausente vira null ("não informado"), para a regra correspondente não ser aplicada.
+     */
+    private static EvidenciaCompetencia evidenciaDaCompetencia(int numero, JsonNode item) {
+        JsonNode problemas = item.path("problemas");
+        JsonNode evidencias = item.path("evidencias");
+        boolean temProblemas = problemas.isArray();
+        return switch (numero) {
+            case 1 -> new EvidenciaCompetencia(
+                    temProblemas ? contarTipo(problemas, "falha_estrutural") : null,
+                    temProblemas ? contarTipo(problemas, "desvio") : null,
+                    null, null, null, null, null, null);
+            case 2 -> new EvidenciaCompetencia(null, null,
+                    evidencias.path("repertorios").isArray() ? contarRepertoriosProdutivos(evidencias.path("repertorios")) : null,
+                    null, null, null, null, null);
+            case 3 -> new EvidenciaCompetencia(null, null, null,
+                    temProblemas ? contarTipo(problemas, "lacuna") : null,
+                    null, null, null, null);
+            case 4 -> new EvidenciaCompetencia(null, null, null, null,
+                    temProblemas ? contarTipo(problemas, "repeticao") : null,
+                    temProblemas ? contarTipo(problemas, "inadequacao") : null,
+                    evidencias.path("operadores_interparagrafos").isArray()
+                            ? contarTextos(evidencias.path("operadores_interparagrafos")) : null,
+                    null);
+            case 5 -> new EvidenciaCompetencia(null, null, null, null, null, null, null,
+                    evidencias.path("elementos").isObject() ? contarElementos(evidencias.path("elementos")) : null);
+            default -> EvidenciaCompetencia.NAO_INFORMADA;
+        };
+    }
+
+    private static int contarTipo(JsonNode problemas, String tipo) {
+        int total = 0;
+        for (JsonNode problema : problemas) {
+            if (tipo.equals(normalizarTipo(texto(problema.path("tipo"))))) {
+                total++;
+            }
+        }
+        return total;
+    }
+
+    private static int contarRepertoriosProdutivos(JsonNode repertorios) {
+        int total = 0;
+        for (JsonNode repertorio : repertorios) {
+            if (repertorio.path("produtivo").asBoolean(false) && texto(repertorio.path("trecho")) != null) {
+                total++;
+            }
+        }
+        return total;
+    }
+
+    private static int contarTextos(JsonNode itens) {
+        int total = 0;
+        for (JsonNode item : itens) {
+            if (textoValido(item)) {
+                total++;
+            }
+        }
+        return total;
+    }
+
+    /** Agente, ação, meio, finalidade e detalhamento: conta os que vieram com trecho. */
+    private static int contarElementos(JsonNode elementos) {
+        String[][] chaves = {
+                {"agente"}, {"acao", "ação"}, {"meio", "modo"}, {"finalidade", "efeito"}, {"detalhamento"}
+        };
+        int total = 0;
+        for (String[] alternativas : chaves) {
+            for (String chave : alternativas) {
+                if (textoValido(elementos.path(chave))) {
+                    total++;
+                    break;
+                }
+            }
+        }
+        return total;
+    }
+
+    /** Texto preenchido e que não seja a palavra "null" escrita pelo modelo. */
+    private static boolean textoValido(JsonNode no) {
+        String valor = texto(no);
+        return valor != null && !valor.equalsIgnoreCase("null");
+    }
+
+    /** "Falha estrutural", "falha-estrutural" e "FALHA_ESTRUTURAL" viram "falha_estrutural"; "repetição" vira "repeticao". */
+    private static String normalizarTipo(String tipo) {
+        if (tipo == null) {
+            return null;
+        }
+        String semAcento = Normalizer.normalize(tipo, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return semAcento.strip().toLowerCase(Locale.ROOT).replaceAll("[\\s-]+", "_");
     }
 
     /** Prompt v2: lista global "problemas_identificados" com a competência em cada item. */

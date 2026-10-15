@@ -17,7 +17,7 @@ Antes de avaliar qualquer competência, verifique se a redação se enquadra em 
 - Contém identificação do autor no texto (nome, assinatura).
 - A proposta de intervenção ou o texto desrespeitam os direitos humanos (defesa de tortura, violência, discriminação por raça, gênero, religião, orientação sexual etc.).
 
-Se QUALQUER critério acima for atendido: "anulada": true, preencha "motivo_anulacao", e mantenha os 5 itens de competência com nota 0, "problemas": [], "analise": "Redação anulada", "nivel_referencia": "Redação anulada" e "resumo": "Redação anulada: <motivo>". Caso contrário: "anulada": false e "motivo_anulacao": null.
+Se QUALQUER critério acima for atendido: "anulada": true, preencha "motivo_anulacao", e mantenha os 5 itens de competência com nota 0, "problemas": [], "evidencias": {}, "analise": "Redação anulada", "nivel_referencia": "Redação anulada" e "resumo": "Redação anulada: <motivo>". Caso contrário: "anulada": false e "motivo_anulacao": null.
 
 ETAPA 2 — AVALIAÇÃO POR COMPETÊNCIA (se não anulada)
 Cada competência vale de 0 a 200 pontos, em um destes 6 níveis fixos. Escolha o nível cujo descritor melhor corresponde ao texto, nunca um valor intermediário.
@@ -125,13 +125,28 @@ EXEMPLOS (inventados, só para ilustrar a régua)
 - C2: "Segundo o filósofo Zygmunt Bauman, vivemos tempos líquidos. Nesse sentido, a falta de saneamento afeta milhões de brasileiros." Repertório legitimado e pertinente, mas só mencionado: o conceito não é explicado nem ligado ao argumento. Vale 160, não 200.
 - C5: "Portanto, o governo deve combater a evasão escolar." Agente (governo) e ação (combater a evasão) válidos; sem meio, finalidade e detalhamento. 2 elementos: vale 80.
 
+EVIDÊNCIAS E TIPOS DE PROBLEMA (obrigatório; o sistema confere a nota a partir destes campos)
+Cada item de "problemas" tem um "tipo":
+- C1: "falha_estrutural" (período truncado, termo essencial ausente ou sobrando, justaposição, período sem oração principal) ou "desvio" (convenção da escrita, gramática ou registro).
+- C2: "repertorio" ou "estrutura".
+- C3: "lacuna" (informação ou argumento sem explicação, genérico ou de senso comum) ou "projeto" (falha de organização ou de foco).
+- C4: "repeticao", "inadequacao" ou "ausencia_coesiva".
+- C5: "elemento_ausente" ou "elemento_nulo".
+Repetição (C4): cada palavra ou expressão que se repete em parágrafos diferentes ou mais de duas vezes no texto é UM problema "repeticao", com os trechos. Não conte as palavras-chave do próprio tema, artigos, preposições e conjunções simples.
+Campo "evidencias" de cada competência:
+- C1 e C3: {}
+- C2: {"repertorios": [{"referencia": "<autor, obra, lei ou dado>", "trecho": "<cópia literal>", "produtivo": <true ou false>, "justificativa": "<por que é ou não produtivo>"}]}. Liste todos os repertórios do texto.
+- C4: {"operadores_interparagrafos": ["<cópia literal do operador que abre cada parágrafo de desenvolvimento e a conclusão>"]}. Liste só os que existem.
+- C5: {"elementos": {"agente": "<trecho ou null>", "acao": "<trecho ou null>", "meio": "<trecho ou null>", "finalidade": "<trecho ou null>", "detalhamento": "<trecho ou null>"}}. Use null para elemento ausente ou nulo.
+
 TAREFA
 Avalie uma competência por vez, sempre nesta ordem:
 1. "problemas": liste cada desvio que você encontrar nessa competência, com o trecho exato do texto do aluno em "trecho" e a explicação em "descricao". Procure ativamente antes de pensar na nota.
-2. "analise": em 2 a 3 frases, relacione os problemas encontrados (ou a ausência deles) aos descritores dos níveis.
-3. "nota": só então escolha o nível (0/40/80/120/160/200). A nota deve ser coerente com os problemas e a análise. Se você listou problemas, a análise precisa explicar por que o nível escolhido ainda se aplica.
-4. "nivel_referencia": copie o texto do descritor oficial escolhido.
-5. "resumo": 1 a 2 frases para o aluno, citando elementos concretos do texto.
+2. "evidencias": preencha os campos da competência conforme a seção EVIDÊNCIAS.
+3. "analise": em 2 a 3 frases, relacione os problemas encontrados (ou a ausência deles) aos descritores dos níveis.
+4. "nota": só então escolha o nível (0/40/80/120/160/200). A nota deve ser coerente com os problemas e a análise. Se você listou problemas, a análise precisa explicar por que o nível escolhido ainda se aplica.
+5. "nivel_referencia": copie o texto do descritor oficial escolhido.
+6. "resumo": 1 a 2 frases para o aluno, citando elementos concretos do texto.
 Depois das 5 competências, liste pontos fortes gerais e pontos de desenvolvimento gerais, e feche com um diagnóstico de 2 a 4 frases apontando a maior fragilidade.
 
 REGRAS IMPORTANTES
@@ -151,8 +166,9 @@ FORMATO DE SAÍDA (JSON estrito; os valores entre < > descrevem o tipo esperado 
     {
       "competencia": "<C1 a C5>",
       "problemas": [
-        { "trecho": "<cópia literal do texto do aluno>", "descricao": "<o desvio e por que pesa nessa competência>" }
+        { "tipo": "<tipo do problema; ver EVIDÊNCIAS>", "trecho": "<cópia literal do texto do aluno>", "descricao": "<o desvio e por que pesa nessa competência>" }
       ],
+      "evidencias": { <campos da competência; ver EVIDÊNCIAS> },
       "analise": "<2 a 3 frases ligando os problemas ao descritor>",
       "nota": <0, 40, 80, 120, 160 ou 200>,
       "nivel_referencia": "<texto do descritor oficial escolhido>",

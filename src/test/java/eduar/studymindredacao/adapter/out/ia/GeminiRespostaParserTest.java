@@ -1,11 +1,13 @@
 package eduar.studymindredacao.adapter.out.ia;
 
 import eduar.studymindredacao.domain.model.CompetenciaAvaliada;
+import eduar.studymindredacao.domain.model.EvidenciaCompetencia;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
 import static eduar.studymindredacao.adapter.out.ia.GeminiRespostas.AVALIACAO_ANULADA;
 import static eduar.studymindredacao.adapter.out.ia.GeminiRespostas.AVALIACAO_V3;
+import static eduar.studymindredacao.adapter.out.ia.GeminiRespostas.AVALIACAO_V3_EVIDENCIAS;
 import static eduar.studymindredacao.adapter.out.ia.GeminiRespostas.AVALIACAO_VALIDA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -76,6 +78,48 @@ class GeminiRespostaParserTest {
         var resultado = parser.interpretar(resposta(AVALIACAO_V3));
 
         assertThat(resultado.respostaBrutaJson()).contains("\"analise\"").contains("Repertório só mencionado");
+    }
+
+    @Test
+    void evidenciasContamTiposDeProblemaNormalizados() {
+        var competencias = parser.interpretar(resposta(AVALIACAO_V3_EVIDENCIAS)).competencias();
+
+        assertThat(competencias.get(0).evidencia().falhasEstruturais()).isEqualTo(1);
+        assertThat(competencias.get(0).evidencia().desvios()).isEqualTo(1);
+        assertThat(competencias.get(2).evidencia().lacunas()).isEqualTo(1);
+        assertThat(competencias.get(3).evidencia().repeticoes()).isEqualTo(2);
+        assertThat(competencias.get(3).evidencia().inadequacoes()).isEqualTo(1);
+    }
+
+    @Test
+    void evidenciasContamSoRepertoriosProdutivosComTrecho() {
+        var c2 = parser.interpretar(resposta(AVALIACAO_V3_EVIDENCIAS)).competencias().get(1);
+
+        assertThat(c2.evidencia().repertoriosProdutivos()).isEqualTo(1);
+    }
+
+    @Test
+    void evidenciasIgnoramTextoNullEscritoPeloModelo() {
+        var competencias = parser.interpretar(resposta(AVALIACAO_V3_EVIDENCIAS)).competencias();
+
+        assertThat(competencias.get(3).evidencia().operadoresInterparagrafos()).isEqualTo(3);
+        assertThat(competencias.get(4).evidencia().elementosProposta()).isEqualTo(3); // agente, ação, modo
+    }
+
+    @Test
+    void formatoSemEvidenciasDeixaCamposNaoInformados() {
+        var resultado = parser.interpretar(resposta(AVALIACAO_VALIDA));
+
+        assertThat(resultado.competencias()).allSatisfy(c ->
+                assertThat(c.evidencia()).isEqualTo(EvidenciaCompetencia.NAO_INFORMADA));
+    }
+
+    @Test
+    void formatoV3SemCampoEvidenciasContaSoOsTiposDosProblemas() {
+        var c4 = parser.interpretar(resposta(AVALIACAO_V3)).competencias().get(3);
+
+        assertThat(c4.evidencia().repeticoes()).isZero(); // problemas sem "tipo"
+        assertThat(c4.evidencia().operadoresInterparagrafos()).isNull(); // campo ausente
     }
 
     @Test

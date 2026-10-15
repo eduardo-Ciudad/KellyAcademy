@@ -54,7 +54,10 @@ class PromptAvaliacaoBuilderTest {
         int criterios = prompt.indexOf("CRITÉRIOS OBJETIVOS POR COMPETÊNCIA");
         assertThat(criterios).isPositive().isLessThan(prompt.indexOf("TAREFA"));
         assertThat(prompt).contains("4 elementos válidos").contains("no máximo 2 desvios")
-                .contains("Na dúvida entre dois níveis, escolha o inferior.");
+                .contains("Na dúvida entre dois níveis, escolha o inferior.")
+                .contains("EVIDÊNCIAS E TIPOS DE PROBLEMA")
+                .contains("\"operadores_interparagrafos\"")
+                .contains("\"elementos\": {\"agente\"");
     }
 
     @Test

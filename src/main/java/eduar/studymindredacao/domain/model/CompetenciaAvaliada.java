@@ -9,7 +9,8 @@ public record CompetenciaAvaliada(
         int nota,
         String nivelReferencia,
         String resumo,
-        List<String> problemasIdentificados) {
+        List<String> problemasIdentificados,
+        EvidenciaCompetencia evidencia) {
 
     public CompetenciaAvaliada {
         if (numero < 1 || numero > 5) {
@@ -25,5 +26,12 @@ public record CompetenciaAvaliada(
         problemasIdentificados = problemasIdentificados == null
                 ? List.of()
                 : List.copyOf(problemasIdentificados);
+        evidencia = evidencia == null ? EvidenciaCompetencia.NAO_INFORMADA : evidencia;
+    }
+
+    /** Sem evidências (avaliações antigas, lidas do banco, ou formato v2 da IA). */
+    public CompetenciaAvaliada(int numero, int nota, String nivelReferencia, String resumo,
+                               List<String> problemasIdentificados) {
+        this(numero, nota, nivelReferencia, resumo, problemasIdentificados, EvidenciaCompetencia.NAO_INFORMADA);
     }
 }
