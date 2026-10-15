@@ -165,21 +165,52 @@ class GeminiRespostaParser {
         return total;
     }
 
-    /** Agente, ação, meio, finalidade e detalhamento: conta os que vieram com trecho. */
+    /**
+     * Agente, ação, meio, finalidade e detalhamento: conta os que vieram com trecho próprio.
+     * Um trecho contido no trecho de outro elemento (ex.: "detalhamento" que é só um pedaço do agente)
+     * não conta: cada parte do texto vale para um elemento só.
+     */
     private static int contarElementos(JsonNode elementos) {
         String[][] chaves = {
                 {"agente"}, {"acao", "ação"}, {"meio", "modo"}, {"finalidade", "efeito"}, {"detalhamento"}
         };
-        int total = 0;
+        List<String> trechos = new ArrayList<>();
         for (String[] alternativas : chaves) {
             for (String chave : alternativas) {
                 if (textoValido(elementos.path(chave))) {
-                    total++;
+                    trechos.add(normalizarTrecho(texto(elementos.path(chave))));
                     break;
                 }
             }
         }
+        int total = 0;
+        for (int i = 0; i < trechos.size(); i++) {
+            if (!trechos.get(i).isEmpty() && !reaproveitado(trechos, i)) {
+                total++;
+            }
+        }
         return total;
+    }
+
+    /** O trecho i está dentro de outro maior, ou repete um anterior idêntico. */
+    private static boolean reaproveitado(List<String> trechos, int i) {
+        String trecho = trechos.get(i);
+        for (int j = 0; j < trechos.size(); j++) {
+            String outro = trechos.get(j);
+            if (j == i || !outro.contains(trecho)) {
+                continue;
+            }
+            if (outro.length() > trecho.length() || j < i) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Minúsculas, sem acento e só letras/números separados por um espaço, para comparar trechos. */
+    private static String normalizarTrecho(String trecho) {
+        String semAcento = Normalizer.normalize(trecho, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return semAcento.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").strip();
     }
 
     /** Texto preenchido e que não seja a palavra "null" escrita pelo modelo. */

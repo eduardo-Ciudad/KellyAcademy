@@ -106,6 +106,34 @@ class GeminiRespostaParserTest {
         assertThat(competencias.get(4).evidencia().elementosProposta()).isEqualTo(3); // agente, ação, modo
     }
 
+    /** Troca os elementos da C5 da fixture com evidências. */
+    private int elementosDaC5(String elementosJson) {
+        String json = AVALIACAO_V3_EVIDENCIAS.replaceFirst(
+                "\"elementos\": \\{[^}]*}", java.util.regex.Matcher.quoteReplacement("\"elementos\": " + elementosJson));
+        return parser.interpretar(resposta(json)).competencias().get(4).evidencia().elementosProposta();
+    }
+
+    @Test
+    void elementoQueEPedacoDeOutroNaoConta() {
+        int total = elementosDaC5("""
+                {"agente": "o governo em colaboração com os órgãos responsáveis pelos cuidados com o idoso",
+                 "acao": "promover o incentivo à prática de esportes", "meio": "por meio de projetos sociais",
+                 "finalidade": "para que o envelhecimento não se torne um problema",
+                 "detalhamento": "Responsáveis pelos cuidados com o idoso"}""");
+
+        assertThat(total).isEqualTo(4);
+    }
+
+    @Test
+    void cincoElementosComTrechosProprios() {
+        int total = elementosDaC5("""
+                {"agente": "o Ministério da Educação", "acao": "promover programas de formação",
+                 "meio": "por meio de plataformas digitais", "finalidade": "a fim de ampliar a identificação",
+                 "detalhamento": "ensinando a reconhecer diferentes manifestações de altas habilidades"}""");
+
+        assertThat(total).isEqualTo(5);
+    }
+
     @Test
     void formatoSemEvidenciasDeixaCamposNaoInformados() {
         var resultado = parser.interpretar(resposta(AVALIACAO_VALIDA));

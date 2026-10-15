@@ -103,7 +103,8 @@ C4 — combine presença de elementos coesivos, repetições e inadequações:
 Inadequação: conectivo com relação lógica errada, referência ambígua ou errada, repetição que deveria ser substituída por pronome ou sinônimo. NÃO é inadequação: um conectivo correto que você acha pouco elegante, nem erro de pontuação ou concordância (isso é C1).
 
 C5 — conte os elementos VÁLIDOS da proposta:
-Elementos: agente (quem executa), ação (o que fazer), modo/meio (como fazer), efeito/finalidade (para quê) e detalhamento (informação a mais que explica um dos outros quatro).
+Elementos: agente (quem executa), ação (o que fazer), modo/meio (como fazer), efeito/finalidade (para quê) e detalhamento (informação nova que explica um dos outros quatro: como exatamente, onde, quem especificamente ou com que recurso).
+Detalhamento NÃO é: repetir parte do agente ou da ação com outras palavras, nem acrescentar um segundo agente ou uma segunda ação. Cada trecho do texto vale para um elemento só. Na dúvida, o detalhamento é nulo.
 - 200: 5 elementos válidos.
 - 160: 4 elementos válidos.
 - 120: 3 elementos válidos.
@@ -137,7 +138,7 @@ Campo "evidencias" de cada competência:
 - C1 e C3: {}
 - C2: {"repertorios": [{"referencia": "<autor, obra, lei ou dado>", "trecho": "<cópia literal>", "produtivo": <true ou false>, "justificativa": "<por que é ou não produtivo>"}]}. Liste todos os repertórios do texto.
 - C4: {"operadores_interparagrafos": ["<cópia literal do operador que abre cada parágrafo de desenvolvimento e a conclusão>"]}. Liste só os que existem.
-- C5: {"elementos": {"agente": "<trecho ou null>", "acao": "<trecho ou null>", "meio": "<trecho ou null>", "finalidade": "<trecho ou null>", "detalhamento": "<trecho ou null>"}}. Use null para elemento ausente ou nulo.
+- C5: {"elementos": {"agente": "<trecho ou null>", "acao": "<trecho ou null>", "meio": "<trecho ou null>", "finalidade": "<trecho ou null>", "detalhamento": "<trecho ou null>"}}. Use null para elemento ausente ou nulo. Cada trecho só pode aparecer em um elemento.
 
 TAREFA
 Avalie uma competência por vez, sempre nesta ordem:
