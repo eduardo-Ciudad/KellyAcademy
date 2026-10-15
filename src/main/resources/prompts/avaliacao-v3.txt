@@ -66,6 +66,58 @@ Proposta que desrespeite os direitos humanos recebe 0 na C5.
 ATENÇÃO ESPECIAL — "REPERTÓRIO DE BOLSO"
 Ao avaliar a C2, distinga repertório produtivo de repertório de bolso. Repertório de bolso é uma referência genérica, decorada e recorrente (ex.: citar uma obra ou pensador conhecido sem explicar sua relação específica com o argumento do texto). Penalize isso mesmo que a referência em si seja "correta". Repertório produtivo é contextualizado, articulado explicitamente ao argumento e demonstra compreensão do conteúdo citado, não apenas menção.
 
+CRITÉRIOS OBJETIVOS POR COMPETÊNCIA (grade de correção do INEP)
+Os descritores acima dizem o que cada nível significa. Os critérios abaixo dizem como decidir entre eles. Antes de escolher cada nota, conte o que o critério pede e registre a contagem em "analise".
+
+C1 — combine estrutura sintática e quantidade de desvios:
+- 200: estrutura sintática excelente (no máximo 1 falha estrutural) E no máximo 2 desvios.
+- 160: estrutura sintática boa E poucos desvios.
+- 120: estrutura sintática regular E alguns desvios.
+- 80: estrutura sintática deficitária OU muitos desvios.
+- 40: estrutura sintática deficitária COM muitos desvios.
+- 0: estrutura sintática inexistente.
+Falha estrutural: período truncado, orações justapostas sem conectivo, termo essencial ausente ou sobrando, período sem oração principal. Desvio: convenção da escrita (acentuação, grafia, hífen, maiúscula), gramática (concordância, regência, crase, pontuação, colocação) ou escolha de registro/vocabulário. Liste cada falha e cada desvio nos problemas da C1, com o trecho.
+
+C2 — exige abordagem completa do tema e as 3 partes (introdução, desenvolvimento, conclusão):
+- 200: as 3 partes desenvolvidas E pelo menos um repertório legitimado, pertinente ao tema E de uso produtivo.
+- 160: as 3 partes desenvolvidas E repertório legitimado e pertinente, mas SEM uso produtivo.
+- 120: as 3 partes (uma pode ser embrionária) E repertório baseado só no tema, não legitimado, ou legitimado mas não pertinente.
+- 80: duas partes embrionárias, ou conclusão encerrada com frase incompleta.
+- 40: tangenciamento do tema, ou traços constantes de outros tipos textuais.
+Uso produtivo: o repertório é explicado e ligado explicitamente ao argumento do parágrafo. Mencionar um autor, obra ou lei sem explicar o conceito nem mostrar a relação com o argumento é uso não produtivo.
+
+C3 — combine projeto de texto e desenvolvimento:
+- 200: projeto estratégico E desenvolvimento em todo o texto (deslizes isolados são tolerados).
+- 160: projeto com poucas falhas E desenvolvimento com poucas lacunas.
+- 120: projeto com algumas falhas E desenvolvimento com algumas lacunas.
+- 80: projeto com muitas falhas E sem desenvolvimento, ou desenvolvendo só uma informação. Contradição grave limita a nota a 80.
+- 40: projeto sem foco temático ou com foco distorcido. Tangenciamento limita a nota a 40.
+Lacuna: informação, fato ou opinião apresentado sem explicação, sem relação explícita com o ponto de vista, ou que fica no senso comum sem aprofundamento.
+
+C4 — combine presença de elementos coesivos, repetições e inadequações:
+- 200: elementos coesivos expressivos entre e dentro dos parágrafos, repetições raras ou ausentes, NENHUMA inadequação. Exige operador argumentativo entre parágrafos pelo menos 2 vezes e algum elemento coesivo em todos os parágrafos.
+- 160: elementos coesivos constantes, poucas repetições, poucas inadequações. Exige ao menos 1 operador argumentativo entre parágrafos.
+- 120: elementos coesivos regulares, ou algumas repetições, ou algumas inadequações.
+- 80: elementos coesivos pontuais, ou muitas repetições, ou muitas inadequações. Texto em bloco único limita a nota a 80.
+- 40: elementos coesivos raros, ou repetições ou inadequações excessivas.
+Inadequação: conectivo com relação lógica errada, referência ambígua ou errada, repetição que deveria ser substituída por pronome ou sinônimo. NÃO é inadequação: um conectivo correto que você acha pouco elegante, nem erro de pontuação ou concordância (isso é C1).
+
+C5 — conte os elementos VÁLIDOS da proposta:
+Elementos: agente (quem executa), ação (o que fazer), modo/meio (como fazer), efeito/finalidade (para quê) e detalhamento (informação a mais que explica um dos outros quatro).
+- 200: 5 elementos válidos.
+- 160: 4 elementos válidos.
+- 120: 3 elementos válidos.
+- 80: 2 elementos válidos. Proposta em estrutura condicional ("se... então") não passa de 80.
+- 40: 1 elemento válido, ou só elementos nulos, ou proposta que tangencia o tema.
+- 0: sem proposta, proposta que desrespeita os direitos humanos, ou proposta não relacionada ao assunto.
+Elemento nulo: vago demais para ser executado (ex.: ação "resolver o problema"). Na "analise" da C5, liste cada elemento encontrado com o seu trecho e diga o total.
+
+REGRA GERAL: cada desvio conta só na competência a que pertence. Pontuação, concordância e grafia: C1. Repertório: C2. Profundidade e organização dos argumentos: C3. Conectivos e referência: C4. Não registre o mesmo desvio em duas competências.
+
+EXEMPLOS (inventados, só para ilustrar a régua)
+- C2: "Segundo o filósofo Zygmunt Bauman, vivemos tempos líquidos. Nesse sentido, a falta de saneamento afeta milhões de brasileiros." Repertório legitimado e pertinente, mas só mencionado: o conceito não é explicado nem ligado ao argumento. Vale 160, não 200.
+- C5: "Portanto, o governo deve combater a evasão escolar." Agente (governo) e ação (combater a evasão) válidos; sem meio, finalidade e detalhamento. 2 elementos: vale 80.
+
 TAREFA
 Avalie uma competência por vez, sempre nesta ordem:
 1. "problemas": liste cada desvio que você encontrar nessa competência, com o trecho exato do texto do aluno em "trecho" e a explicação em "descricao". Procure ativamente antes de pensar na nota.

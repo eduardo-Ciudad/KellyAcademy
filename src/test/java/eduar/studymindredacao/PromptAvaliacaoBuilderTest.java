@@ -48,6 +48,15 @@ class PromptAvaliacaoBuilderTest {
     }
 
     @Test
+    void promptV3TrazCriteriosObjetivosAntesDaTarefa() {
+        String prompt = builder.construir(new SolicitacaoAvaliacao("T", "texto"));
+
+        int criterios = prompt.indexOf("CRITÉRIOS OBJETIVOS POR COMPETÊNCIA");
+        assertThat(criterios).isPositive().isLessThan(prompt.indexOf("TAREFA"));
+        assertThat(prompt).contains("4 elementos válidos").contains("no máximo 2 desvios");
+    }
+
+    @Test
     void preservaCaracteresEspeciaisDoTexto() {
         String prompt = builder.construir(new SolicitacaoAvaliacao("T", "custa R$ 10 e usa \\n literal"));
 
