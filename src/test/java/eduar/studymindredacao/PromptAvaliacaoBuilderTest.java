@@ -1,6 +1,7 @@
 package eduar.studymindredacao;
 
 
+import eduar.studymindredacao.domain.model.AnaliseTexto;
 import eduar.studymindredacao.domain.model.SolicitacaoAvaliacao;
 import eduar.studymindredacao.adapter.out.ia.PromptAvaliacaoBuilder;
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,31 @@ class PromptAvaliacaoBuilderTest {
                 .contains("EVIDÊNCIAS E TIPOS DE PROBLEMA")
                 .contains("\"operadores_interparagrafos\"")
                 .contains("\"elementos\": {\"agente\"");
+    }
+
+    @Test
+    void incluiOsDadosAutomaticosDoTexto() {
+        String texto = """
+                Em primeiro plano, cabe destacar a formação adequada.
+
+                Em segundo plano, cabe destacar o apoio adequado e o recurso adequado.
+                """;
+
+        String prompt = builder.construir(new SolicitacaoAvaliacao("Tema qualquer", texto));
+
+        assertThat(prompt).contains("DADOS AUTOMÁTICOS DO TEXTO")
+                .contains("- Parágrafos: 2")
+                .contains("§1 \"em primeiro plano\"")
+                .contains("expressão \"cabe destacar\" em parágrafos diferentes (§1, §2)")
+                .contains("\"adequada/adequado\" 3x no texto (§1, §2)")
+                .doesNotContain("{{dados_texto}}");
+    }
+
+    @Test
+    void semAnaliseInformaQueNaoHaDados() {
+        String prompt = builder.construir(new SolicitacaoAvaliacao("T", "texto", AnaliseTexto.VAZIA));
+
+        assertThat(prompt).contains("DADOS AUTOMÁTICOS DO TEXTO").contains("Não disponível.");
     }
 
     @Test

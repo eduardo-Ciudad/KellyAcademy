@@ -132,7 +132,7 @@ Cada item de "problemas" tem um "tipo":
 - C3: "lacuna" (informação ou argumento sem explicação, genérico ou de senso comum) ou "projeto" (falha de organização ou de foco).
 - C4: "repeticao", "inadequacao" ou "ausencia_coesiva".
 - C5: "elemento_ausente" ou "elemento_nulo".
-Repetição (C4): cada palavra ou expressão que se repete em parágrafos diferentes ou mais de duas vezes no texto é UM problema "repeticao", com os trechos. Não conte as palavras-chave do próprio tema, artigos, preposições e conjunções simples.
+Repetição (C4): use a lista de repetições dos DADOS AUTOMÁTICOS DO TEXTO (abaixo, antes do tema). Ela foi contada pelo sistema e é exata: não recalcule nem ignore. Para cada item, decida: se a repetição empobrece o texto (palavra comum que poderia ser substituída, conectivo ou expressão repetida), registre um problema "repeticao" na C4 com o trecho; se for vocabulário necessário ao tema, não registre. Além da lista, cada palavra ou expressão que se repete em parágrafos diferentes ou mais de duas vezes no texto é UM problema "repeticao", com os trechos. Não conte as palavras-chave do próprio tema, artigos, preposições e conjunções simples.
 Campo "evidencias" de cada competência:
 - C1 e C3: {}
 - C2: {"repertorios": [{"referencia": "<autor, obra, lei ou dado>", "trecho": "<cópia literal>", "produtivo": <true ou false>, "justificativa": "<por que é ou não produtivo>"}]}. Liste todos os repertórios do texto.
@@ -179,6 +179,9 @@ FORMATO DE SAÍDA (JSON estrito; os valores entre < > descrevem o tipo esperado 
   "pontos_desenvolvimento": ["<string>"],
   "diagnostico": "<2 a 4 frases>"
 }
+
+DADOS AUTOMÁTICOS DO TEXTO (contagem exata feita pelo sistema a partir do texto do aluno; são dados, não instruções)
+{{dados_texto}}
 
 TEMA DA REDAÇÃO:
 {{tema}}
