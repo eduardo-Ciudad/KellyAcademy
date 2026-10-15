@@ -34,6 +34,20 @@ class PromptAvaliacaoBuilderTest {
     }
 
     @Test
+    void promptV3PedeProblemasEAnaliseAntesDaNota() {
+        String prompt = builder.construir(new SolicitacaoAvaliacao("T", "texto"));
+        String formato = prompt.substring(prompt.indexOf("FORMATO DE SAÍDA"));
+
+        int problemas = formato.indexOf("\"problemas\": [");
+        int analise = formato.indexOf("\"analise\": \"<");
+        int nota = formato.indexOf("\"nota\": <");
+        assertThat(problemas).isPositive();
+        assertThat(problemas).isLessThan(analise);
+        assertThat(analise).isLessThan(nota);
+        assertThat(prompt).doesNotContain("problemas_identificados");
+    }
+
+    @Test
     void preservaCaracteresEspeciaisDoTexto() {
         String prompt = builder.construir(new SolicitacaoAvaliacao("T", "custa R$ 10 e usa \\n literal"));
 

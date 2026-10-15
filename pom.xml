@@ -28,6 +28,9 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<!-- Testes com @Tag("calibracao") chamam a API real do Gemini: fora do mvn test e do CI. -->
+		<testes.grupos></testes.grupos>
+		<testes.excluidos>calibracao</testes.excluidos>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -134,7 +137,25 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<groups>${testes.grupos}</groups>
+					<excludedGroups>${testes.excluidos}</excludedGroups>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 
+	<profiles>
+		<!-- mvnw test -Pcalibracao : roda só a calibração da correção (ver src/test/resources/calibracao/README.md) -->
+		<profile>
+			<id>calibracao</id>
+			<properties>
+				<testes.grupos>calibracao</testes.grupos>
+				<testes.excluidos></testes.excluidos>
+			</properties>
+		</profile>
+	</profiles>
 </project>

@@ -49,14 +49,7 @@ class GeminiRespostaParser {
     }
 
     private List<CompetenciaAvaliada> competencias(JsonNode avaliacao) {
-        Map<Integer, List<String>> problemasPorCompetencia = new HashMap<>();
-        for (JsonNode problema : avaliacao.path("problemas_identificados")) {
-            Integer numero = numeroDaCompetencia(problema.path("competencia"));
-            String descricao = texto(problema.path("descricao"));
-            if (numero != null && descricao != null) {
-                problemasPorCompetencia.computeIfAbsent(numero, n -> new ArrayList<>()).add(descricao);
-            }
-        }
+        Map<Integer, List<String>> problemasDoFormatoV2 = problemasDoFormatoV2(avaliacao);
 
         List<CompetenciaAvaliada> competencias = new ArrayList<>();
         for (JsonNode item : avaliacao.path("avaliacao_por_competencia")) {
@@ -67,15 +60,57 @@ class GeminiRespostaParser {
             if (!item.path("nota").isNumber()) {
                 throw new IllegalArgumentException("nota ausente ou não numérica na C" + numero);
             }
+            List<String> problemas = new ArrayList<>(problemasDaCompetencia(item.path("problemas")));
+            problemas.addAll(problemasDoFormatoV2.getOrDefault(numero, List.of()));
             competencias.add(new CompetenciaAvaliada(
                     numero,
                     item.path("nota").asInt(),
                     texto(item.path("nivel_referencia")),
                     texto(item.path("resumo")),
-                    problemasPorCompetencia.getOrDefault(numero, List.of())
+                    problemas
             ));
         }
         return competencias;
+    }
+
+    /**
+     * Prompt v3: problemas dentro de cada competência, como {"trecho", "descricao"}.
+     * Cada um vira "descricao — "trecho"" para caber na lista de texto que já é persistida.
+     */
+    private static List<String> problemasDaCompetencia(JsonNode problemas) {
+        List<String> itens = new ArrayList<>();
+        for (JsonNode problema : problemas) {
+            if (problema.isString()) {
+                String valor = texto(problema);
+                if (valor != null) {
+                    itens.add(valor);
+                }
+                continue;
+            }
+            String descricao = texto(problema.path("descricao"));
+            String trecho = texto(problema.path("trecho"));
+            if (descricao != null && trecho != null) {
+                itens.add(descricao + " — \"" + trecho + "\"");
+            } else if (descricao != null) {
+                itens.add(descricao);
+            } else if (trecho != null) {
+                itens.add("\"" + trecho + "\"");
+            }
+        }
+        return itens;
+    }
+
+    /** Prompt v2: lista global "problemas_identificados" com a competência em cada item. */
+    private static Map<Integer, List<String>> problemasDoFormatoV2(JsonNode avaliacao) {
+        Map<Integer, List<String>> problemasPorCompetencia = new HashMap<>();
+        for (JsonNode problema : avaliacao.path("problemas_identificados")) {
+            Integer numero = numeroDaCompetencia(problema.path("competencia"));
+            String descricao = texto(problema.path("descricao"));
+            if (numero != null && descricao != null) {
+                problemasPorCompetencia.computeIfAbsent(numero, n -> new ArrayList<>()).add(descricao);
+            }
+        }
+        return problemasPorCompetencia;
     }
 
     private static Integer numeroDaCompetencia(JsonNode no) {

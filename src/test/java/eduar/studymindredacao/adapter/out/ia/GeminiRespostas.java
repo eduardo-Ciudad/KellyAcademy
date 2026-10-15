@@ -29,6 +29,35 @@ final class GeminiRespostas {
             }
             """;
 
+    /** Formato do prompt v3: problemas e análise dentro de cada competência, antes da nota. */
+    static final String AVALIACAO_V3 = """
+            {
+              "anulada": false,
+              "motivo_anulacao": null,
+              "avaliacao_por_competencia": [
+                {"competencia": "C1", "problemas": [], "analise": "Sem desvios relevantes.",
+                 "nota": 200, "nivel_referencia": "excelente domínio", "resumo": "Norma bem aplicada."},
+                {"competencia": "C2",
+                 "problemas": [{"trecho": "Pierre Bourdieu estudou como as desigualdades podem ser reproduzidas",
+                                "descricao": "repertório citado sem conceito nem ligação com o tema"}],
+                 "analise": "Repertório só mencionado limita a nota.",
+                 "nota": 160, "nivel_referencia": "argumentação consistente", "resumo": "Bourdieu genérico."},
+                {"competencia": "C3", "problemas": [], "analise": "Argumentos organizados.",
+                 "nota": 160, "nivel_referencia": "indícios de autoria", "resumo": "Argumentos claros."},
+                {"competencia": "C4",
+                 "problemas": [{"trecho": "cabe destacar", "descricao": "expressão repetida nos dois desenvolvimentos"},
+                               {"descricao": "falta conectivo entre os desenvolvimentos"}],
+                 "analise": "Poucas inadequações.",
+                 "nota": 160, "nivel_referencia": "poucas inadequações", "resumo": "Repetição de expressão."},
+                {"competencia": "C5", "problemas": [], "analise": "Cinco elementos presentes.",
+                 "nota": 200, "nivel_referencia": "proposta detalhada", "resumo": "Proposta completa."}
+              ],
+              "pontos_fortes": ["proposta completa"],
+              "pontos_desenvolvimento": ["aprofundar o repertório"],
+              "diagnostico": "A maior fragilidade está na C2."
+            }
+            """;
+
     static final String AVALIACAO_ANULADA = """
             {
               "anulada": true,

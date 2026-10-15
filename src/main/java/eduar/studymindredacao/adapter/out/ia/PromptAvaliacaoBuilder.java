@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 @Component
 public class PromptAvaliacaoBuilder {
 
-    private static final String RECURSO = "prompts/avaliacao-v2.txt";
+    private static final String RECURSO = "prompts/avaliacao-v3.txt";
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{(tema|texto)}}");
     private static final Pattern TAG_REDACAO = Pattern.compile("(?i)</?redacao>");
 

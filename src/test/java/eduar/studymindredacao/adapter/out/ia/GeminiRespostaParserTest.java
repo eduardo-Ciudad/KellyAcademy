@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
 import static eduar.studymindredacao.adapter.out.ia.GeminiRespostas.AVALIACAO_ANULADA;
+import static eduar.studymindredacao.adapter.out.ia.GeminiRespostas.AVALIACAO_V3;
 import static eduar.studymindredacao.adapter.out.ia.GeminiRespostas.AVALIACAO_VALIDA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,6 +49,33 @@ class GeminiRespostaParserTest {
         assertThat(c5.problemasIdentificados()).containsExactly("não define quem executa a ação", "sem meio de execução");
         assertThat(c2.problemasIdentificados()).containsExactly("cita Bauman sem relacionar ao tema");
         assertThat(c1.problemasIdentificados()).isEmpty();
+    }
+
+    @Test
+    void formatoV3LeProblemasDeDentroDeCadaCompetencia() {
+        var resultado = parser.interpretar(resposta(AVALIACAO_V3));
+
+        assertThat(resultado.notaTotal()).isEqualTo(880);
+        assertThat(resultado.competencias().get(1).problemasIdentificados()).containsExactly(
+                "repertório citado sem conceito nem ligação com o tema — "
+                        + "\"Pierre Bourdieu estudou como as desigualdades podem ser reproduzidas\"");
+        assertThat(resultado.competencias().get(0).problemasIdentificados()).isEmpty();
+    }
+
+    @Test
+    void formatoV3ProblemaSemTrechoGuardaSoADescricao() {
+        var resultado = parser.interpretar(resposta(AVALIACAO_V3));
+
+        assertThat(resultado.competencias().get(3).problemasIdentificados()).containsExactly(
+                "expressão repetida nos dois desenvolvimentos — \"cabe destacar\"",
+                "falta conectivo entre os desenvolvimentos");
+    }
+
+    @Test
+    void formatoV3MantemAnaliseNaRespostaBruta() {
+        var resultado = parser.interpretar(resposta(AVALIACAO_V3));
+
+        assertThat(resultado.respostaBrutaJson()).contains("\"analise\"").contains("Repertório só mencionado");
     }
 
     @Test
