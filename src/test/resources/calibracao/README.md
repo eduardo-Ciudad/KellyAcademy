@@ -8,6 +8,7 @@ está dando a nota certa. Roda antes de trocar prompt ou modelo (issues #24, #25
 ```json
 {
   "id": "enem2025-a-760",
+  "tipo": "oficial",
   "fonte": "ENEM 2025 — espelho oficial INEP",
   "conferido": true,
   "tema": "...",
@@ -28,13 +29,28 @@ está dando a nota certa. Roda antes de trocar prompt ou modelo (issues #24, #25
 - Palavra separada por hífen no fim da linha é juntada (`so-` + `ciedade` → `sociedade`).
 - **Nenhum dado pessoal**: sem nome, CPF, inscrição ou data de nascimento. Use IDs neutros.
 
-## Tolerância
+## Régua (correção rigorosa)
 
-A nota oficial do ENEM é a **média de dois corretores**, então aparecem 20, 60, 100, 140, 180.
-A IA sempre responde em múltiplos de 40. Por isso:
+A Kelly corrige pela matriz de forma **mais rigorosa que o ENEM**. A nota oficial do INEP é o
+**teto**, não o alvo. A nota oficial é a média de dois corretores (múltiplos de 20) e a IA responde
+em múltiplos de 40, por isso há uma folga de 20.
 
-- **Acerto por competência**: erro absoluto ≤ 20.
-- **Meta (#28)**: erro médio no total ≤ 40 e nenhum 1000 em redação oficial abaixo de 940.
+| Meta | Regra |
+|---|---|
+| Nunca acima do oficial | nenhuma execução acima do total oficial + 20 |
+| Consistência | amplitude (máx − mín) de cada redação ≤ 80 |
+| Sanidade inferior | nenhuma execução mais de 200 abaixo do oficial (indica erro de leitura, não rigor) |
+| Teto das verificações | redações `verificacao` nunca acima de `teto_total` e nunca 1000 |
+
+Viés negativo por competência é esperado. Viés positivo é o que se quer evitar.
+
+## Redações de verificação
+
+Casos sem nota oficial, usados só como teto (ex.: a redação da issue #23, que a v2 corrigiu com 1000):
+
+```json
+{ "id": "verificacao-superdotacao", "tipo": "verificacao", "tema": "...", "texto": "...", "teto_total": 960 }
+```
 
 ## Privacidade
 
@@ -64,3 +80,4 @@ Relatório em `target/calibracao/relatorio-<data>.md` e respostas brutas em `tar
 |---|---|---|---|
 | enem2025-a-760 | ENEM 2025, espelho INEP | 760 | pendente |
 | enem2025-b-560 | ENEM 2025, espelho INEP | 560 | pendente |
+| verificacao-superdotacao | Issue #23 (teto 960, sem nota oficial; nunca 1000) | — | — |

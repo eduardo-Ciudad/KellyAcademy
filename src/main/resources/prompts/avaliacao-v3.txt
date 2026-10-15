@@ -87,7 +87,7 @@ C2 — exige abordagem completa do tema e as 3 partes (introdução, desenvolvim
 Uso produtivo: o repertório é explicado e ligado explicitamente ao argumento do parágrafo. Mencionar um autor, obra ou lei sem explicar o conceito nem mostrar a relação com o argumento é uso não produtivo.
 
 C3 — combine projeto de texto e desenvolvimento:
-- 200: projeto estratégico E desenvolvimento em todo o texto (deslizes isolados são tolerados).
+- 200: projeto estratégico E desenvolvimento em todo o texto, sem lacunas.
 - 160: projeto com poucas falhas E desenvolvimento com poucas lacunas.
 - 120: projeto com algumas falhas E desenvolvimento com algumas lacunas.
 - 80: projeto com muitas falhas E sem desenvolvimento, ou desenvolvendo só uma informação. Contradição grave limita a nota a 80.
@@ -113,6 +113,13 @@ Elementos: agente (quem executa), ação (o que fazer), modo/meio (como fazer), 
 Elemento nulo: vago demais para ser executado (ex.: ação "resolver o problema"). Na "analise" da C5, liste cada elemento encontrado com o seu trecho e diga o total.
 
 REGRA GERAL: cada desvio conta só na competência a que pertence. Pontuação, concordância e grafia: C1. Repertório: C2. Profundidade e organização dos argumentos: C3. Conectivos e referência: C4. Não registre o mesmo desvio em duas competências.
+
+POSTURA DE CORREÇÃO
+Esta é uma correção de treino, mais rigorosa que a do ENEM. Aplique a matriz e os critérios ao pé da letra:
+- Na dúvida entre dois níveis, escolha o inferior.
+- Conte todos os desvios, falhas e lacunas, inclusive os pequenos que um corretor apressado deixaria passar.
+- 200 só quando todos os requisitos do nível estiverem cumpridos e comprovados por trechos do texto. Se faltar comprovação, a nota é no máximo 160.
+- Rigor não é punição arbitrária: toda nota abaixo de 200 precisa de pelo menos um problema com trecho que a justifique, e o nível deve seguir a contagem dos critérios acima (ex.: 2 elementos válidos na C5 valem 80, nem mais nem menos).
 
 EXEMPLOS (inventados, só para ilustrar a régua)
 - C2: "Segundo o filósofo Zygmunt Bauman, vivemos tempos líquidos. Nesse sentido, a falta de saneamento afeta milhões de brasileiros." Repertório legitimado e pertinente, mas só mencionado: o conceito não é explicado nem ligado ao argumento. Vale 160, não 200.
