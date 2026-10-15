@@ -3,6 +3,7 @@ package eduar.studymindredacao.adapter.out.ia;
 import eduar.studymindredacao.domain.model.CompetenciaAvaliada;
 import eduar.studymindredacao.domain.model.ResultadoAvaliacaoIA;
 import eduar.studymindredacao.domain.model.SolicitacaoAvaliacao;
+import eduar.studymindredacao.domain.service.RegrasDaGrade;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -59,7 +60,8 @@ class CalibracaoRunnerTest {
     }
 
     /** Uma execução da correção: notas C1..C5, ou erro se a chamada falhou. */
-    record Execucao(int[] notas, String erro, long milissegundos) {
+    /** Notas finais (após a grade), notas dadas pela IA e quais competências a grade limitou. */
+    record Execucao(int[] notas, int[] notasIA, boolean[] ajustadas, String erro, long milissegundos) {
         boolean ok() {
             return erro == null;
         }
@@ -138,15 +140,25 @@ class CalibracaoRunnerTest {
     private Execucao executar(GeminiAvaliacaoAdapter adapter, RedacaoCalibracao redacao, Path arquivoResposta) {
         long inicio = System.nanoTime();
         try {
-            ResultadoAvaliacaoIA resultado = adapter.avaliar(new SolicitacaoAvaliacao(redacao.tema(), redacao.texto()));
-            Files.writeString(arquivoResposta, resultado.respostaBrutaJson(), StandardCharsets.UTF_8);
+            ResultadoAvaliacaoIA daIA = adapter.avaliar(new SolicitacaoAvaliacao(redacao.tema(), redacao.texto()));
+            Files.writeString(arquivoResposta, daIA.respostaBrutaJson(), StandardCharsets.UTF_8);
+            // Mede o que vai para produção: a nota depois das regras da grade (#27)
+            RegrasDaGrade.Resultado conferido = RegrasDaGrade.aplicar(daIA);
             int[] notas = new int[5];
-            for (CompetenciaAvaliada competencia : resultado.competencias()) {
+            int[] notasIA = new int[5];
+            boolean[] ajustadas = new boolean[5];
+            for (CompetenciaAvaliada competencia : conferido.avaliacao().competencias()) {
                 notas[competencia.numero() - 1] = competencia.nota();
             }
-            return new Execucao(notas, null, (System.nanoTime() - inicio) / 1_000_000);
+            for (CompetenciaAvaliada competencia : daIA.competencias()) {
+                notasIA[competencia.numero() - 1] = competencia.nota();
+            }
+            for (RegrasDaGrade.Ajuste ajuste : conferido.ajustes()) {
+                ajustadas[ajuste.competencia() - 1] = true;
+            }
+            return new Execucao(notas, notasIA, ajustadas, null, (System.nanoTime() - inicio) / 1_000_000);
         } catch (RuntimeException | IOException e) {
-            return new Execucao(new int[5], e.getClass().getSimpleName() + ": " + e.getMessage(),
+            return new Execucao(new int[5], new int[5], new boolean[5], e.getClass().getSimpleName() + ": " + e.getMessage(),
                     (System.nanoTime() - inicio) / 1_000_000);
         }
     }
@@ -178,6 +190,18 @@ class CalibracaoRunnerTest {
         double[] somaVies = new double[5];
         int[] contagemVies = new int[5];
         int[] competenciasAcima = new int[5];
+        int[] ajustesDaGrade = new int[5];
+        for (List<Execucao> execucoes : resultados) {
+            for (Execucao execucao : execucoes) {
+                if (execucao.ok()) {
+                    for (int c = 0; c < 5; c++) {
+                        if (execucao.ajustadas()[c]) {
+                            ajustesDaGrade[c]++;
+                        }
+                    }
+                }
+            }
+        }
 
         md.append("## Redações com nota oficial\n\n");
         md.append("| Redação | Oficial | Execuções | Média | Viés | Amplitude | C1 | C2 | C3 | C4 | C5 | Obs. |\n");
@@ -281,7 +305,12 @@ class CalibracaoRunnerTest {
         for (int c = 0; c < 5; c++) {
             md.append(" ").append(competenciasAcima[c]).append(" |");
         }
-        md.append("\n\nNegativo = mais rigorosa que o INEP (esperado). Positivo = mais generosa (a evitar).\n\n");
+        md.append("\n| Notas limitadas pela grade (#27) |");
+        for (int c = 0; c < 5; c++) {
+            md.append(" ").append(ajustesDaGrade[c]).append(" |");
+        }
+        md.append("\n\nNegativo = mais rigorosa que o INEP (esperado). Positivo = mais generosa (a evitar).\n");
+        md.append("As notas do relatório já são as finais, depois das regras da grade.\n\n");
 
         boolean semDados = execucoesOficiais == 0;
         boolean metaOk = !semDados && acimaDoOficial == 0 && abaixoDoLimite == 0

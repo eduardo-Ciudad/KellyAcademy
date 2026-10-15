@@ -5,6 +5,7 @@ import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.model.CompetenciaAvaliada;
+import eduar.studymindredacao.domain.model.EvidenciaCompetencia;
 import eduar.studymindredacao.domain.model.ResultadoAvaliacaoIA;
 import eduar.studymindredacao.domain.model.SolicitacaoAvaliacao;
 import eduar.studymindredacao.domain.model.Tema;
@@ -42,6 +43,7 @@ class EnviarRedacaoServiceTest {
     private final UsoIADiarioEmMemoria uso = new UsoIADiarioEmMemoria();
     private final List<SolicitacaoAvaliacao> chamadasIA = new ArrayList<>();
     private RuntimeException falhaDaIA;
+    private ResultadoAvaliacaoIA respostaDaIA;
     private EnviarRedacaoService service;
     private Tema tema;
 
@@ -50,7 +52,7 @@ class EnviarRedacaoServiceTest {
         if (falhaDaIA != null) {
             throw falhaDaIA;
         }
-        return resultado();
+        return respostaDaIA != null ? respostaDaIA : resultado();
     };
 
     private static ResultadoAvaliacaoIA resultado() {
@@ -124,6 +126,27 @@ class EnviarRedacaoServiceTest {
                 .isInstanceOf(LimiteDiarioAtingidoException.class);
         assertThat(chamadasIA).hasSize(LIMITE);
         assertThat(redacoes.todas()).hasSize(LIMITE);
+    }
+
+    @Test
+    void notaQueAGradeNaoSustentaELimitadaAntesDeSalvar() {
+        var tresRepeticoes = new EvidenciaCompetencia(null, null, null, null, 3, 0, 3, null);
+        var competencias = List.of(
+                new CompetenciaAvaliada(1, 200, "n", "r1", List.of()),
+                new CompetenciaAvaliada(2, 200, "n", "r2", List.of()),
+                new CompetenciaAvaliada(3, 200, "n", "r3", List.of()),
+                new CompetenciaAvaliada(4, 200, "n", "r4", List.of("a", "b", "c"), tresRepeticoes),
+                new CompetenciaAvaliada(5, 200, "n", "r5", List.of())
+        );
+        respostaDaIA = new ResultadoAvaliacaoIA(false, null, competencias, List.of(), List.of(),
+                "d", "gemini-teste", 2000, 600, "{}");
+
+        var detalhada = service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO);
+
+        assertThat(detalhada.avaliacao().notaTotal()).isEqualTo((short) 960);
+        assertThat(avaliacoes.todas()).singleElement()
+                .satisfies(a -> assertThat(a.competencias().get(3).problemasIdentificados())
+                        .last().asString().startsWith("Nota limitada a 160 pela grade do INEP"));
     }
 
     @Test

@@ -13,6 +13,7 @@ import eduar.studymindredacao.domain.port.AvaliacaoIAPort;
 import eduar.studymindredacao.domain.port.RedacaoRepositoryPort;
 import eduar.studymindredacao.domain.port.TemaRepositoryPort;
 import eduar.studymindredacao.domain.port.UsoIADiarioRepositoryPort;
+import eduar.studymindredacao.domain.service.RegrasDaGrade;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +25,7 @@ import java.util.UUID;
 
 /**
  * Fluxo síncrono de correção:
- * valida → reserva vaga do dia → salva redação EM_AVALIACAO → chama a IA → conclui.
+ * valida → reserva vaga do dia → salva redação EM_AVALIACAO → chama a IA → confere pela grade → conclui.
  * Se a IA (ou a conclusão) falhar, a redação vai para ERRO e a vaga é devolvida.
  * Sem @Transactional de propósito: cada passo tem a sua transação curta.
  */
@@ -90,12 +91,25 @@ public class EnviarRedacaoService {
 
         try {
             var resultado = avaliacaoIA.avaliar(new SolicitacaoAvaliacao(tema.titulo(), texto));
-            return concluirAvaliacao.concluir(redacao, tema, resultado, hoje);
+            var conferido = RegrasDaGrade.aplicar(resultado);
+            registrarConferencia(redacao.id(), conferido);
+            return concluirAvaliacao.concluir(redacao, tema, conferido.avaliacao(), hoje);
         } catch (RuntimeException e) {
             log.warn("Correção da redação {} falhou: {}", redacao.id(), LogSeguro.limpar(e.getMessage()));
             marcarComoErro(redacao, e);
             usoRepository.liberarCorrecao(usuarioId, hoje);
             throw e;
+        }
+    }
+
+    /** Log sem texto do aluno: só id, competência, notas e a regra aplicada (#27). */
+    private static void registrarConferencia(UUID redacaoId, RegrasDaGrade.Resultado conferido) {
+        for (RegrasDaGrade.Ajuste ajuste : conferido.ajustes()) {
+            log.info("Grade limitou C{} da redação {}: {} -> {} ({})", ajuste.competencia(), redacaoId,
+                    ajuste.notaIA(), ajuste.notaFinal(), LogSeguro.limpar(ajuste.motivo()));
+        }
+        for (String incoerencia : conferido.incoerencias()) {
+            log.warn("Correção incoerente na redação {}: {}", redacaoId, LogSeguro.limpar(incoerencia));
         }
     }
 
