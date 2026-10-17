@@ -43,4 +43,7 @@ public class UsuarioEntity {
     @CreationTimestamp
     @Column(name = "criado_em", nullable = false, updatable = false)
     private OffsetDateTime criadoEm;
+
+    @Column(name = "email_verificado_em")
+    private OffsetDateTime emailVerificadoEm;
 }

@@ -50,6 +50,7 @@ public class CadastrarUsuarioService {
                 emailNormalizado,
                 senhaEncoder.codificar(senha),
                 Role.ALUNO,
+                null,
                 null
         );
         return usuarioRepository.salvar(usuario);

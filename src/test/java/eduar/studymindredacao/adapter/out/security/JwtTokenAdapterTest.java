@@ -18,7 +18,7 @@ class JwtTokenAdapterTest {
     private static final String ISSUER = "studymind-redacao";
 
     private final Usuario usuario = new Usuario(
-            UUID.randomUUID(), "Eduardo", "edu@exemplo.com", "hash", Role.ALUNO, null
+            UUID.randomUUID(), "Eduardo", "edu@exemplo.com", "hash", Role.ALUNO, null, null
     );
 
     @Test
