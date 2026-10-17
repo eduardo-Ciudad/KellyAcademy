@@ -35,7 +35,9 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(sessao -> sessao.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/auth/cadastro", "/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/auth/cadastro", "/auth/login", "/auth/verificar-email", "/auth/reenviar-verificacao"
+                        ).permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )

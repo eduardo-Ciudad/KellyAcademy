@@ -5,6 +5,7 @@ import eduar.studymindredacao.domain.exception.AvaliacaoIAException;
 import eduar.studymindredacao.domain.exception.CadastroFechadoException;
 import eduar.studymindredacao.domain.exception.CredenciaisInvalidasException;
 import eduar.studymindredacao.domain.exception.EmailJaCadastradoException;
+import eduar.studymindredacao.domain.exception.EmailNaoVerificadoException;
 import eduar.studymindredacao.domain.exception.ImagemInvalidaException;
 import eduar.studymindredacao.domain.exception.ImagemNaoReconhecidaException;
 import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
@@ -13,6 +14,7 @@ import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.exception.RepertorioNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.TemaNaoAdicionavelException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
+import eduar.studymindredacao.domain.exception.TokenInvalidoException;
 import eduar.studymindredacao.domain.exception.TranscricaoIAException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
@@ -36,6 +38,9 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    static final String CODIGO_EMAIL_NAO_VERIFICADO = "EMAIL_NAO_VERIFICADO";
+    static final String CODIGO_TOKEN_INVALIDO = "TOKEN_INVALIDO";
+
     private final Clock clock;
 
     public GlobalExceptionHandler(Clock clock) {
@@ -126,6 +131,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getSegundosParaTentarDeNovo()))
                 .body(ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage()));
+    }
+
+    // Senha certa, e-mail ainda não confirmado: o código separa este 403 do cadastro fechado e o front oferece reenviar
+    @ExceptionHandler(EmailNaoVerificadoException.class)
+    public ProblemDetail emailNaoVerificado(EmailNaoVerificadoException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_EMAIL_NAO_VERIFICADO);
+        return problema;
+    }
+
+    // Inexistente, expirado ou já usado: mesma resposta, para não ajudar quem testa tokens
+    @ExceptionHandler(TokenInvalidoException.class)
+    public ProblemDetail tokenInvalido(TokenInvalidoException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_TOKEN_INVALIDO);
+        return problema;
     }
 
     @ExceptionHandler(CadastroFechadoException.class)

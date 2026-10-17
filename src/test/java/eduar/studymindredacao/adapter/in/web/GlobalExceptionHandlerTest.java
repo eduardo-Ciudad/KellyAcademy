@@ -3,6 +3,7 @@ package eduar.studymindredacao.adapter.in.web;
 import eduar.studymindredacao.adapter.in.web.security.TentativasExcedidasException;
 import eduar.studymindredacao.domain.exception.AvaliacaoIAException;
 import eduar.studymindredacao.domain.exception.CadastroFechadoException;
+import eduar.studymindredacao.domain.exception.EmailNaoVerificadoException;
 import eduar.studymindredacao.domain.exception.ImagemInvalidaException;
 import eduar.studymindredacao.domain.exception.ImagemNaoReconhecidaException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
@@ -10,6 +11,7 @@ import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.exception.TemaNaoAdicionavelException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
+import eduar.studymindredacao.domain.exception.TokenInvalidoException;
 import eduar.studymindredacao.domain.exception.TranscricaoIAException;
 import eduar.studymindredacao.domain.model.enums.RecursoIA;
 import org.junit.jupiter.api.Test;
@@ -126,5 +128,32 @@ class GlobalExceptionHandlerTest {
         var quaseMeiaNoite = Clock.fixed(Instant.parse("2026-09-29T02:59:59.900Z"), ZoneId.of("America/Sao_Paulo"));
 
         assertThat(new GlobalExceptionHandler(quaseMeiaNoite).segundosAteAmanha()).isEqualTo(1);
+    }
+
+    @Test
+    void emailNaoVerificadoResponde403ComCodigoProprio() {
+        var problema = handler.emailNaoVerificado(new EmailNaoVerificadoException());
+
+        assertThat(problema.getStatus()).isEqualTo(403);
+        assertThat(problema.getProperties()).containsEntry("codigo", "EMAIL_NAO_VERIFICADO");
+        assertThat(problema.getDetail()).contains("Confirme seu e-mail");
+    }
+
+    @Test
+    void cadastroFechadoContinua403SemOCodigoDoEmail() {
+        var problema = handler.cadastroFechado(new CadastroFechadoException());
+
+        assertThat(problema.getStatus()).isEqualTo(403);
+        assertThat(problema.getProperties() == null ? java.util.Map.of() : problema.getProperties())
+                .doesNotContainKey("codigo");
+    }
+
+    @Test
+    void tokenInvalidoResponde400ComMensagemUnica() {
+        var problema = handler.tokenInvalido(new TokenInvalidoException());
+
+        assertThat(problema.getStatus()).isEqualTo(400);
+        assertThat(problema.getDetail()).isEqualTo("Link inválido ou expirado. Peça um novo link.");
+        assertThat(problema.getProperties()).containsEntry("codigo", "TOKEN_INVALIDO");
     }
 }
