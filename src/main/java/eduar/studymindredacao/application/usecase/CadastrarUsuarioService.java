@@ -9,6 +9,9 @@ import eduar.studymindredacao.domain.port.UsuarioRepositoryPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.OffsetDateTime;
+
 @Service
 public class CadastrarUsuarioService {
     static final int SENHA_TAMANHO_MINIMO = 8;
@@ -17,15 +20,21 @@ public class CadastrarUsuarioService {
     private final UsuarioRepositoryPort usuarioRepository;
     private final SenhaEncoderPort senhaEncoder;
     private final PoliticaCadastro politica;
+    private final VerificacaoEmailService verificacaoEmail;
+    private final Clock clock;
 
     public CadastrarUsuarioService(
             UsuarioRepositoryPort usuarioRepository,
             SenhaEncoderPort senhaEncoder,
-            PoliticaCadastro politica
+            PoliticaCadastro politica,
+            VerificacaoEmailService verificacaoEmail,
+            Clock clock
     ) {
         this.usuarioRepository = usuarioRepository;
         this.senhaEncoder = senhaEncoder;
         this.politica = politica;
+        this.verificacaoEmail = verificacaoEmail;
+        this.clock = clock;
     }
 
     @Transactional
@@ -44,6 +53,8 @@ public class CadastrarUsuarioService {
             throw new EmailJaCadastradoException(emailNormalizado);
         }
 
+        // Verificação desligada: a conta já nasce confirmada (comportamento de antes da feature)
+        OffsetDateTime verificadoEm = verificacaoEmail.verificacaoObrigatoria() ? null : OffsetDateTime.now(clock);
         var usuario = new Usuario(
                 null,
                 nome == null ? null : nome.trim(),
@@ -51,9 +62,12 @@ public class CadastrarUsuarioService {
                 senhaEncoder.codificar(senha),
                 Role.ALUNO,
                 null,
-                null
+                verificadoEm
         );
-        return usuarioRepository.salvar(usuario);
+        var salvo = usuarioRepository.salvar(usuario);
+        // Mesma transação: se o cadastro falhar depois daqui, o token some junto e o e-mail não sai (afterCommit)
+        verificacaoEmail.emitirPara(salvo);
+        return salvo;
     }
 
     private static void validarSenha(String senha) {

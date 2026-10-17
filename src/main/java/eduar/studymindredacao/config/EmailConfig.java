@@ -3,6 +3,7 @@ package eduar.studymindredacao.config;
 import eduar.studymindredacao.adapter.out.email.EnvioEmailDesligadoAdapter;
 import eduar.studymindredacao.adapter.out.email.ModeloEmailVerificacao;
 import eduar.studymindredacao.adapter.out.email.SmtpEnvioEmailAdapter;
+import eduar.studymindredacao.application.usecase.PoliticaVerificacaoEmail;
 import eduar.studymindredacao.domain.port.EnvioEmailPort;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +34,16 @@ public class EmailConfig {
     ) {
         return criar(Boolean.parseBoolean(habilitado == null ? "" : habilitado.strip()),
                 validadeVerificacao(validade), filaMaxima, remetente, nomeRemetente, mailSender::getObject);
+    }
+
+    @Bean
+    PoliticaVerificacaoEmail politicaVerificacaoEmail(
+            @Value("${app.email.habilitado}") String habilitado,
+            @Value("${app.email.verificacao-validade}") String validade,
+            @Value("${app.frontend-url:}") String frontendUrl
+    ) {
+        return new PoliticaVerificacaoEmail(Boolean.parseBoolean(habilitado == null ? "" : habilitado.strip()),
+                validadeVerificacao(validade), frontendUrl);
     }
 
     static EnvioEmailPort criar(
