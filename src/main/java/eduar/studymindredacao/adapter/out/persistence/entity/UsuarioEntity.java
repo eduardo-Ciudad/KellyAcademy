@@ -33,7 +33,13 @@ public class UsuarioEntity {
     @Column(nullable = false, unique = true, length = 150)
     private String email;
 
-    @Column(name = "senha_hash", nullable = false, length = 255)
+    /*
+     * senha_hash, versao_sessao e senha_alterada_em só são gravados no INSERT (cadastro). Depois disso mudam
+     * apenas pelo UPDATE atômico de UsuarioJpaRepository.alterarSenha. Assim um salvar() de outro fluxo
+     * (ex.: confirmar o e-mail) com um Usuario carregado antes da troca não regrava a senha antiga nem a
+     * versão antiga por cima, o que desfaria a troca e reabriria as sessões derrubadas.
+     */
+    @Column(name = "senha_hash", nullable = false, length = 255, updatable = false)
     private String senhaHash;
 
     @Enumerated(EnumType.STRING)
@@ -46,4 +52,10 @@ public class UsuarioEntity {
 
     @Column(name = "email_verificado_em")
     private OffsetDateTime emailVerificadoEm;
+
+    @Column(name = "versao_sessao", nullable = false, updatable = false)
+    private int versaoSessao;
+
+    @Column(name = "senha_alterada_em", updatable = false)
+    private OffsetDateTime senhaAlteradaEm;
 }

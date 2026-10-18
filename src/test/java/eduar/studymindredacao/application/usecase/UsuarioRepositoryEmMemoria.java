@@ -42,4 +42,21 @@ class UsuarioRepositoryEmMemoria implements UsuarioRepositoryPort {
     public void excluirPorId(UUID id) {
         usuarios.remove(id);
     }
+
+    /** Mesma regra do UPDATE do JPA, pelo método do domínio. */
+    @Override
+    public Optional<Usuario> alterarSenha(UUID id, String novoSenhaHash, OffsetDateTime quando) {
+        var atual = usuarios.get(id);
+        if (atual == null) {
+            return Optional.empty();
+        }
+        var alterado = atual.comSenhaAlterada(novoSenhaHash, quando);
+        usuarios.put(id, alterado);
+        return Optional.of(alterado);
+    }
+
+    @Override
+    public Optional<Integer> buscarVersaoSessao(UUID id) {
+        return Optional.ofNullable(usuarios.get(id)).map(Usuario::versaoSessao);
+    }
 }

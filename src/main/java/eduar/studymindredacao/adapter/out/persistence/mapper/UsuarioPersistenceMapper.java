@@ -15,7 +15,9 @@ public final class UsuarioPersistenceMapper {
                 entity.getSenhaHash(),
                 entity.getRole(),
                 entity.getCriadoEm(),
-                entity.getEmailVerificadoEm()
+                entity.getEmailVerificadoEm(),
+                entity.getVersaoSessao(),
+                entity.getSenhaAlteradaEm()
         );
     }
 
@@ -28,6 +30,8 @@ public final class UsuarioPersistenceMapper {
         entity.setRole(domain.role());
         entity.setCriadoEm(domain.criadoEm());
         entity.setEmailVerificadoEm(domain.emailVerificadoEm());
+        entity.setVersaoSessao(domain.versaoSessao());
+        entity.setSenhaAlteradaEm(domain.senhaAlteradaEm());
         return entity;
     }
 }

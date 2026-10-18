@@ -22,7 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Integração com o Postgres real (Flyway aplica até a V16). Mesmo slice de JPA do teste do Repertório:
+ * Integração com o Postgres real (Flyway aplica até a V17). Mesmo slice de JPA do teste do Repertório:
  * só precisa das variáveis do banco. Cada teste roda numa transação desfeita no fim, então nada fica no banco.
  */
 @DataJpaTest
@@ -161,5 +161,39 @@ class TokenUsuarioRepositoryAdapterIntegrationTest {
         var devolta = usuarios.buscarPorId(usuarioId).orElseThrow();
         assertThat(devolta.emailVerificado()).isTrue();
         assertThat(devolta.emailVerificadoEm()).isAtSameInstantAs(AGORA);
+    }
+
+    @Test
+    void tokenDeRedefinicaoDeSenhaESalvoEConsumido() {
+        String hash = hash();
+        tokens.salvar(TokenUsuario.novo(usuarioId, TipoTokenUsuario.REDEFINICAO_SENHA, hash, AGORA, Duration.ofMinutes(30)));
+
+        assertThat(tokens.consumirValido(hash, TipoTokenUsuario.REDEFINICAO_SENHA, AGORA.plusMinutes(1)))
+                .contains(usuarioId);
+    }
+
+    @Test
+    void tokenDeUmTipoNaoServeParaOOutro() {
+        String redefinicao = hash();
+        String verificacao = hash();
+        tokens.salvar(TokenUsuario.novo(usuarioId, TipoTokenUsuario.REDEFINICAO_SENHA, redefinicao, AGORA, Duration.ofMinutes(30)));
+        salvarToken(verificacao, AGORA, Duration.ofHours(24));
+
+        assertThat(tokens.consumirValido(redefinicao, TipoTokenUsuario.VERIFICACAO_EMAIL, AGORA.plusMinutes(1))).isEmpty();
+        assertThat(tokens.consumirValido(verificacao, TipoTokenUsuario.REDEFINICAO_SENHA, AGORA.plusMinutes(1))).isEmpty();
+        assertThat(tokens.consumirValido(redefinicao, TipoTokenUsuario.REDEFINICAO_SENHA, AGORA.plusMinutes(2)))
+                .as("a tentativa com o tipo errado não queimou o token").contains(usuarioId);
+    }
+
+    @Test
+    void invalidarAtivosDeUmTipoNaoMexeNoOutroTipo() {
+        String verificacao = hash();
+        salvarToken(verificacao, AGORA, Duration.ofHours(24));
+        tokens.salvar(TokenUsuario.novo(usuarioId, TipoTokenUsuario.REDEFINICAO_SENHA, hash(), AGORA, Duration.ofMinutes(30)));
+
+        int invalidados = tokens.invalidarAtivos(usuarioId, TipoTokenUsuario.REDEFINICAO_SENHA, AGORA.plusMinutes(1));
+
+        assertThat(invalidados).isEqualTo(1);
+        assertThat(tokens.consumirValido(verificacao, TIPO, AGORA.plusMinutes(2))).contains(usuarioId);
     }
 }

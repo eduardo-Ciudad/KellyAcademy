@@ -35,4 +35,30 @@ class UsuarioPersistenceMapperTest {
         assertThat(entity.getEmailVerificadoEm()).isNull();
         assertThat(UsuarioPersistenceMapper.toDomain(entity).emailVerificado()).isFalse();
     }
+
+    @Test
+    void idaEVoltaPreservaVersaoDaSessaoEDataDaTroca() {
+        var original = new Usuario(UUID.randomUUID(), "Ana", "ana@exemplo.com", "hash", Role.ALUNO,
+                CRIADO, CRIADO.plusMinutes(3), 2, CRIADO.plusDays(1));
+
+        var entity = UsuarioPersistenceMapper.toEntity(original);
+        var devolta = UsuarioPersistenceMapper.toDomain(entity);
+
+        assertThat(entity.getVersaoSessao()).isEqualTo(2);
+        assertThat(entity.getSenhaAlteradaEm()).isEqualTo(CRIADO.plusDays(1));
+        assertThat(devolta).isEqualTo(original);
+    }
+
+    @Test
+    void contaQueNuncaTrocouASenhaTemVersaoZeroEDataNula() {
+        var original = new Usuario(UUID.randomUUID(), "Ana", "ana@exemplo.com", "hash", Role.ALUNO, CRIADO, null);
+
+        var entity = UsuarioPersistenceMapper.toEntity(original);
+        var devolta = UsuarioPersistenceMapper.toDomain(entity);
+
+        assertThat(entity.getVersaoSessao()).isZero();
+        assertThat(entity.getSenhaAlteradaEm()).isNull();
+        assertThat(devolta.versaoSessao()).isZero();
+        assertThat(devolta.senhaAlteradaEm()).isNull();
+    }
 }
