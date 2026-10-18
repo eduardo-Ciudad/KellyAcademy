@@ -1,6 +1,6 @@
 package eduar.studymindredacao.adapter.in.web.security;
 
-import eduar.studymindredacao.domain.port.TokenPort;
+import eduar.studymindredacao.application.usecase.ValidarSessaoService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,7 +26,7 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, TokenPort tokenPort) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, ValidarSessaoService validarSessao) throws Exception {
         return http
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
@@ -44,7 +44,7 @@ public class SecurityConfig {
                 .exceptionHandling(erro -> erro
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                 )
-                .addFilterBefore(new JwtAuthenticationFilter(tokenPort), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new JwtAuthenticationFilter(validarSessao), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

@@ -4,12 +4,12 @@ import eduar.studymindredacao.adapter.in.web.security.LimitadorDeTentativas;
 import eduar.studymindredacao.adapter.in.web.security.SecurityConfig;
 import eduar.studymindredacao.application.usecase.AutenticarUsuarioService;
 import eduar.studymindredacao.application.usecase.CadastrarUsuarioService;
+import eduar.studymindredacao.application.usecase.ValidarSessaoService;
 import eduar.studymindredacao.application.usecase.VerificacaoEmailService;
 import eduar.studymindredacao.domain.exception.EmailNaoVerificadoException;
 import eduar.studymindredacao.domain.exception.TokenInvalidoException;
 import eduar.studymindredacao.domain.model.Usuario;
 import eduar.studymindredacao.domain.model.enums.Role;
-import eduar.studymindredacao.domain.port.TokenPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -66,7 +66,7 @@ class AuthControllerTest {
     @MockitoBean
     private VerificacaoEmailService verificacaoEmail;
     @MockitoBean
-    private TokenPort tokenPort;
+    private ValidarSessaoService validarSessao;
 
     private static RequestPostProcessor ip(String endereco) {
         return requisicao -> {

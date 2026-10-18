@@ -3,6 +3,7 @@ package eduar.studymindredacao.adapter.out.security;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.auth0.jwt.interfaces.Claim;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.interfaces.JWTVerifier;
 import eduar.studymindredacao.domain.model.DadosToken;
@@ -20,12 +21,16 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Component
 public class JwtTokenAdapter implements TokenPort {
     static final int TAMANHO_MINIMO_SECRET = 32;
     private static final String CLAIM_EMAIL = "email";
     private static final String CLAIM_ROLE = "role";
+    /** Versão da sessão do usuário quando o token foi emitido. Ver ValidarSessaoService. */
+    static final String CLAIM_VERSAO_SESSAO = "sv";
+    private static final Pattern VERSAO_VALIDA = Pattern.compile("^[0-9]{1,9}$");
 
     private final Algorithm algoritmo;
     private final JWTVerifier verificador;
@@ -65,6 +70,7 @@ public class JwtTokenAdapter implements TokenPort {
                 .withSubject(usuario.id().toString())
                 .withClaim(CLAIM_EMAIL, usuario.email())
                 .withClaim(CLAIM_ROLE, usuario.role().name())
+                .withClaim(CLAIM_VERSAO_SESSAO, usuario.versaoSessao())
                 .withIssuedAt(agora)
                 .withExpiresAt(expiraEm)
                 .sign(algoritmo);
@@ -78,13 +84,33 @@ public class JwtTokenAdapter implements TokenPort {
         }
         try {
             DecodedJWT jwt = verificador.verify(token);
+            Optional<Integer> versaoSessao = lerVersaoSessao(jwt.getClaim(CLAIM_VERSAO_SESSAO));
+            if (versaoSessao.isEmpty()) {
+                return Optional.empty();
+            }
             return Optional.of(new DadosToken(
                     UUID.fromString(jwt.getSubject()),
                     jwt.getClaim(CLAIM_EMAIL).asString(),
-                    Role.valueOf(jwt.getClaim(CLAIM_ROLE).asString())
+                    Role.valueOf(jwt.getClaim(CLAIM_ROLE).asString()),
+                    versaoSessao.get()
             ));
         } catch (JWTVerificationException | IllegalArgumentException | NullPointerException e) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * Sem a claim: token emitido antes da versão de sessão existir, conta como 0 (ninguém é deslogado no deploy).
+     * Presente, só vale inteiro maior ou igual a zero; qualquer outra coisa recusa o token.
+     */
+    private static Optional<Integer> lerVersaoSessao(Claim claim) {
+        if (claim == null || claim.isMissing()) {
+            return Optional.of(0);
+        }
+        // Confere o JSON bruto: asInt() aceitaria 1.5 truncando para 1. Só dígitos (até 9, cabe em int).
+        String bruto = claim.toString();
+        return bruto != null && VERSAO_VALIDA.matcher(bruto).matches()
+                ? Optional.of(Integer.parseInt(bruto))
+                : Optional.empty();
     }
 }

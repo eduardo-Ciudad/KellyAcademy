@@ -1,6 +1,6 @@
 package eduar.studymindredacao.adapter.in.web.security;
 
-import eduar.studymindredacao.domain.port.TokenPort;
+import eduar.studymindredacao.application.usecase.ValidarSessaoService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,10 +22,10 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String PREFIXO_BEARER = "Bearer ";
 
-    private final TokenPort tokenPort;
+    private final ValidarSessaoService validarSessao;
 
-    public JwtAuthenticationFilter(TokenPort tokenPort) {
-        this.tokenPort = tokenPort;
+    public JwtAuthenticationFilter(ValidarSessaoService validarSessao) {
+        this.validarSessao = validarSessao;
     }
 
     @Override
@@ -40,7 +40,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 && header.startsWith(PREFIXO_BEARER)
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
             String token = header.substring(PREFIXO_BEARER.length()).trim();
-            tokenPort.validar(token).ifPresent(dados -> {
+            // Assinatura, expiração e versão da sessão (senha trocada derruba o token). Recusado: segue sem
+            // autenticação e o entry point responde 401
+            validarSessao.validar(token).ifPresent(dados -> {
                 var principal = new UsuarioAutenticado(dados.usuarioId(), dados.email(), dados.role());
                 var autenticacao = UsernamePasswordAuthenticationToken.authenticated(
                         principal,
