@@ -1,0 +1,514 @@
+{
+  "info": {
+    "_postman_id": "8aadf7a8-a5fd-4167-b52c-9d40b3271593",
+    "name": "StudyMind Redação — Senha",
+    "description": "Esqueci minha senha, redefinir pelo link e alterar logado.\n\nAntes de rodar: defina `email` (conta que já existe) e, depois do passo 1, cole em `tokenRedefinicao` o token do e-mail (o que vem depois de #token=). Os passos 4 em diante mudam a senha da conta.\n\nLimites: esqueci-senha 3/h por e-mail e 5/h por IP; redefinir 10/min por IP; alterar 5 a cada 15 min por conta.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Esqueci minha senha (202)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/esqueci-senha",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "esqueci-senha"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Com EMAIL_HABILITADO=true chega um e-mail com o link /redefinir-senha#token=... (vale 30 min). Copie o que vem depois de #token= para a variável tokenRedefinicao.",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 202\", () => pm.response.to.have.status(202));",
+              "pm.test(\"Mensagem neutra\", () => pm.expect(pm.response.json().mensagem).to.include(\"Se existir uma conta\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Esqueci minha senha - e-mail que não existe (mesma resposta)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/esqueci-senha",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "esqueci-senha"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"ninguem.{{$timestamp}}@teste.com\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 202 mesmo sem conta\", () => pm.response.to.have.status(202));",
+              "pm.test(\"Mesma mensagem\", () => pm.expect(pm.response.json().mensagem).to.include(\"Se existir uma conta\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Redefinir senha - senha fraca (400, não queima o link)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/redefinir-senha",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "redefinir-senha"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{tokenRedefinicao}}\",\n  \"novaSenha\": \"curta\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"Mensagem da regra de senha\", () => pm.expect(pm.response.json().detail).to.include(\"senha\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Redefinir senha (204)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/redefinir-senha",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "redefinir-senha"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{tokenRedefinicao}}\",\n  \"novaSenha\": \"{{senhaNova}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Redefinir de novo com o mesmo link (400 TOKEN_INVALIDO)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/redefinir-senha",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "redefinir-senha"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{tokenRedefinicao}}\",\n  \"novaSenha\": \"{{senhaNova}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"Código TOKEN_INVALIDO\", () => pm.expect(pm.response.json().codigo).to.eql(\"TOKEN_INVALIDO\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Login com a senha nova",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"senha\": \"{{senhaNova}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set(\"accessToken\", pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Alterar senha - senha atual errada (400 SENHA_ATUAL_INCORRETA)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me/senha",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me",
+            "senha"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"senhaAtual\": \"senhaErrada999\",\n  \"novaSenha\": \"{{senhaTrocada}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 400 (não 401)\", () => pm.response.to.have.status(400));",
+              "pm.test(\"Código SENHA_ATUAL_INCORRETA\", () => pm.expect(pm.response.json().codigo).to.eql(\"SENHA_ATUAL_INCORRETA\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Alterar senha (200 com token novo)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me/senha",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me",
+            "senha"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"senhaAtual\": \"{{senhaNova}}\",\n  \"novaSenha\": \"{{senhaTrocada}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const novo = pm.response.json().accessToken;",
+              "pm.test(\"Devolve um token novo\", () => pm.expect(novo).to.be.a(\"string\").and.not.eql(pm.collectionVariables.get(\"accessToken\")));",
+              "pm.collectionVariables.set(\"tokenAntigo\", pm.collectionVariables.get(\"accessToken\"));",
+              "pm.collectionVariables.set(\"accessToken\", novo);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Token de antes da troca não vale mais (401)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me"
+          ]
+        },
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.request.headers.upsert({ key: \"Authorization\", value: \"Bearer \" + pm.collectionVariables.get(\"tokenAntigo\") });"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Token novo continua valendo (200)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me"
+          ]
+        },
+        "description": "",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "email",
+      "value": ""
+    },
+    {
+      "key": "tokenRedefinicao",
+      "value": ""
+    },
+    {
+      "key": "senhaNova",
+      "value": "senhaNova123"
+    },
+    {
+      "key": "senhaTrocada",
+      "value": "senhaTrocada456"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "tokenAntigo",
+      "value": ""
+    }
+  ]
+}

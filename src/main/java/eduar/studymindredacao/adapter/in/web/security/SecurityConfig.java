@@ -36,7 +36,8 @@ public class SecurityConfig {
                 .sessionManagement(sessao -> sessao.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST,
-                                "/auth/cadastro", "/auth/login", "/auth/verificar-email", "/auth/reenviar-verificacao"
+                                "/auth/cadastro", "/auth/login", "/auth/verificar-email", "/auth/reenviar-verificacao",
+                                "/auth/esqueci-senha", "/auth/redefinir-senha"
                         ).permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()

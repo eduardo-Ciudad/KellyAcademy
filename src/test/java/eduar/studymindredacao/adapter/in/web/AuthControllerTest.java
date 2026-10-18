@@ -4,6 +4,7 @@ import eduar.studymindredacao.adapter.in.web.security.LimitadorDeTentativas;
 import eduar.studymindredacao.adapter.in.web.security.SecurityConfig;
 import eduar.studymindredacao.application.usecase.AutenticarUsuarioService;
 import eduar.studymindredacao.application.usecase.CadastrarUsuarioService;
+import eduar.studymindredacao.application.usecase.RedefinicaoSenhaService;
 import eduar.studymindredacao.application.usecase.ValidarSessaoService;
 import eduar.studymindredacao.application.usecase.VerificacaoEmailService;
 import eduar.studymindredacao.domain.exception.EmailNaoVerificadoException;
@@ -65,6 +66,8 @@ class AuthControllerTest {
     private AutenticarUsuarioService autenticarUsuario;
     @MockitoBean
     private VerificacaoEmailService verificacaoEmail;
+    @MockitoBean
+    private RedefinicaoSenhaService redefinicaoSenha;
     @MockitoBean
     private ValidarSessaoService validarSessao;
 
@@ -196,5 +199,115 @@ class AuthControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.emailVerificado").value(false))
                 .andExpect(jsonPath("$.senhaHash").doesNotExist());
+    }
+
+    // ---------- POST /auth/esqueci-senha ----------
+
+    @Test
+    void esqueciSenhaEhPublicoEResponde202ComMensagemNeutra() throws Exception {
+        mvc.perform(json("/auth/esqueci-senha", "{\"email\":\"ana@exemplo.com\"}", "10.0.7.1"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.mensagem").value(AuthController.MENSAGEM_ESQUECI_SENHA));
+
+        verify(redefinicaoSenha).solicitar("ana@exemplo.com");
+    }
+
+    @Test
+    void esqueciSenhaRespondeIgualParaQualquerEmail() throws Exception {
+        String existe = mvc.perform(json("/auth/esqueci-senha", "{\"email\":\"ana@exemplo.com\"}", "10.0.7.2"))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        String naoExiste = mvc.perform(json("/auth/esqueci-senha", "{\"email\":\"ninguem@exemplo.com\"}", "10.0.7.2"))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(naoExiste).isEqualTo(existe);
+    }
+
+    @Test
+    void esqueciSenhaComEmailInvalidoResponde400SemChamarOCasoDeUso() throws Exception {
+        mvc.perform(json("/auth/esqueci-senha", "{\"email\":\"nao-e-email\"}", "10.0.7.3"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(json("/auth/esqueci-senha", "{}", "10.0.7.3"))
+                .andExpect(status().isBadRequest());
+
+        verify(redefinicaoSenha, never()).solicitar(anyString());
+    }
+
+    @Test
+    void esqueciSenhaTemLimitePorEmailMesmoComIpsDiferentes() throws Exception {
+        for (int i = 0; i < AuthController.ESQUECI_SENHA_POR_EMAIL_POR_HORA; i++) {
+            mvc.perform(json("/auth/esqueci-senha", "{\"email\":\"esqueci@exemplo.com\"}", "10.0.8." + i))
+                    .andExpect(status().isAccepted());
+        }
+
+        mvc.perform(json("/auth/esqueci-senha", "{\"email\":\"ESQUECI@exemplo.com\"}", "10.0.8.99"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists(HttpHeaders.RETRY_AFTER));
+        verify(redefinicaoSenha, times(AuthController.ESQUECI_SENHA_POR_EMAIL_POR_HORA)).solicitar(anyString());
+    }
+
+    @Test
+    void esqueciSenhaTemLimitePorIp() throws Exception {
+        for (int i = 0; i < AuthController.ESQUECI_SENHA_POR_IP_POR_HORA; i++) {
+            mvc.perform(json("/auth/esqueci-senha", "{\"email\":\"ip" + i + "@exemplo.com\"}", "10.0.9.1"))
+                    .andExpect(status().isAccepted());
+        }
+
+        mvc.perform(json("/auth/esqueci-senha", "{\"email\":\"outro@exemplo.com\"}", "10.0.9.1"))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    // ---------- POST /auth/redefinir-senha ----------
+
+    @Test
+    void redefinirSenhaEhPublicoEResponde204() throws Exception {
+        mvc.perform(json("/auth/redefinir-senha", "{\"token\":\"AbC_123\",\"novaSenha\":\"senhaNova123\"}", "10.0.10.1"))
+                .andExpect(status().isNoContent());
+
+        verify(redefinicaoSenha).redefinir("AbC_123", "senhaNova123");
+    }
+
+    @Test
+    void redefinirComTokenInvalidoResponde400ComCodigo() throws Exception {
+        doThrow(new TokenInvalidoException()).when(redefinicaoSenha).redefinir("vencido", "senhaNova123");
+
+        mvc.perform(json("/auth/redefinir-senha", "{\"token\":\"vencido\",\"novaSenha\":\"senhaNova123\"}", "10.0.10.2"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("TOKEN_INVALIDO"));
+    }
+
+    @Test
+    void redefinirComSenhaFracaResponde400ComAMensagemDaRegra() throws Exception {
+        doThrow(new IllegalArgumentException("senha deve ter pelo menos 8 caracteres"))
+                .when(redefinicaoSenha).redefinir("AbC_123", "curta");
+
+        mvc.perform(json("/auth/redefinir-senha", "{\"token\":\"AbC_123\",\"novaSenha\":\"curta\"}", "10.0.10.3"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("senha deve ter pelo menos 8 caracteres"))
+                .andExpect(jsonPath("$.codigo").doesNotExist());
+    }
+
+    @Test
+    void redefinirSemTokenOuSemSenhaResponde400SemChamarOCasoDeUso() throws Exception {
+        mvc.perform(json("/auth/redefinir-senha", "{\"novaSenha\":\"senhaNova123\"}", "10.0.10.4"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(json("/auth/redefinir-senha", "{\"token\":\"AbC_123\"}", "10.0.10.4"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(json("/auth/redefinir-senha", "{\"token\":\"" + "x".repeat(129) + "\",\"novaSenha\":\"senhaNova123\"}", "10.0.10.4"))
+                .andExpect(status().isBadRequest());
+
+        verify(redefinicaoSenha, never()).redefinir(anyString(), anyString());
+    }
+
+    @Test
+    void redefinirTemLimiteDeTentativasPorIp() throws Exception {
+        for (int i = 0; i < AuthController.REDEFINIR_POR_IP_POR_MINUTO; i++) {
+            mvc.perform(json("/auth/redefinir-senha", "{\"token\":\"t" + i + "\",\"novaSenha\":\"senhaNova123\"}", "10.0.11.1"))
+                    .andExpect(status().isNoContent());
+        }
+
+        mvc.perform(json("/auth/redefinir-senha", "{\"token\":\"mais-um\",\"novaSenha\":\"senhaNova123\"}", "10.0.11.1"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists(HttpHeaders.RETRY_AFTER));
+        verify(redefinicaoSenha, never()).redefinir(org.mockito.ArgumentMatchers.eq("mais-um"), anyString());
     }
 }

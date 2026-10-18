@@ -12,6 +12,7 @@ import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.exception.RepertorioNaoEncontradoException;
+import eduar.studymindredacao.domain.exception.SenhaAtualIncorretaException;
 import eduar.studymindredacao.domain.exception.TemaNaoAdicionavelException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.TokenInvalidoException;
@@ -40,6 +41,7 @@ import java.util.Map;
 public class GlobalExceptionHandler {
     static final String CODIGO_EMAIL_NAO_VERIFICADO = "EMAIL_NAO_VERIFICADO";
     static final String CODIGO_TOKEN_INVALIDO = "TOKEN_INVALIDO";
+    static final String CODIGO_SENHA_ATUAL_INCORRETA = "SENHA_ATUAL_INCORRETA";
 
     private final Clock clock;
 
@@ -146,6 +148,14 @@ public class GlobalExceptionHandler {
     public ProblemDetail tokenInvalido(TokenInvalidoException ex) {
         var problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problema.setProperty("codigo", CODIGO_TOKEN_INVALIDO);
+        return problema;
+    }
+
+    // 400 e não 401: o aluno continua logado, o front só mostra o erro no campo da senha atual
+    @ExceptionHandler(SenhaAtualIncorretaException.class)
+    public ProblemDetail senhaAtualIncorreta(SenhaAtualIncorretaException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_SENHA_ATUAL_INCORRETA);
         return problema;
     }
 
