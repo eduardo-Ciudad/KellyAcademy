@@ -1,5 +1,7 @@
 package eduar.studymindredacao.adapter.out.email;
 
+import eduar.studymindredacao.domain.model.MensagemRedefinicaoSenha;
+import eduar.studymindredacao.domain.model.MensagemSenhaAlterada;
 import eduar.studymindredacao.domain.model.MensagemVerificacaoEmail;
 import eduar.studymindredacao.domain.port.EnvioEmailPort;
 import jakarta.mail.internet.MimeMessage;
@@ -21,7 +23,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Envio por SMTP (Gmail com senha de app). Três cuidados:
+ * Envio por SMTP (Gmail com senha de app) de todos os e-mails (verificação, redefinição de senha e aviso de
+ * senha alterada). Três cuidados:
  * <ul>
  *   <li>com transação aberta, só agenda depois do commit: cadastro desfeito não manda link morto;</li>
  *   <li>o envio roda num executor próprio e limitado: SMTP lento não prende as threads da API, e o tempo de
@@ -36,14 +39,14 @@ public class SmtpEnvioEmailAdapter implements EnvioEmailPort, AutoCloseable {
     private final Executor executor;
     private final String remetente;
     private final String nomeRemetente;
-    private final ModeloEmailVerificacao modelo;
+    private final ModelosEmail modelos;
 
     public SmtpEnvioEmailAdapter(
             JavaMailSender mailSender,
             Executor executor,
             String remetente,
             String nomeRemetente,
-            ModeloEmailVerificacao modelo
+            ModelosEmail modelos
     ) {
         this.mailSender = Objects.requireNonNull(mailSender, "mailSender é obrigatório");
         this.executor = Objects.requireNonNull(executor, "executor é obrigatório");
@@ -52,7 +55,7 @@ public class SmtpEnvioEmailAdapter implements EnvioEmailPort, AutoCloseable {
         }
         this.remetente = remetente.strip();
         this.nomeRemetente = nomeRemetente == null || nomeRemetente.isBlank() ? "Kelly Academy" : nomeRemetente.strip();
-        this.modelo = Objects.requireNonNull(modelo, "modelo é obrigatório");
+        this.modelos = Objects.requireNonNull(modelos, "modelos é obrigatório");
     }
 
     /**
@@ -79,30 +82,44 @@ public class SmtpEnvioEmailAdapter implements EnvioEmailPort, AutoCloseable {
     @Override
     public void enviarVerificacao(MensagemVerificacaoEmail mensagem) {
         // Monta antes de agendar: link inválido é erro de programação e deve aparecer já, não na thread do e-mail
-        EmailMontado email = modelo.montar(mensagem);
-        Runnable envio = () -> enviarAgora(email);
+        enviar(modelos.verificacao().montar(mensagem), "verificação");
+    }
+
+    @Override
+    public void enviarRedefinicaoSenha(MensagemRedefinicaoSenha mensagem) {
+        enviar(modelos.redefinicaoSenha().montar(mensagem), "redefinição de senha");
+    }
+
+    @Override
+    public void enviarAvisoSenhaAlterada(MensagemSenhaAlterada mensagem) {
+        enviar(modelos.senhaAlterada().montar(mensagem), "aviso de senha alterada");
+    }
+
+    /** Com transação aberta, só agenda depois do commit; sem transação, agenda na hora. */
+    private void enviar(EmailMontado email, String tipo) {
+        Runnable envio = () -> enviarAgora(email, tipo);
 
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    agendar(envio, email);
+                    agendar(envio, email, tipo);
                 }
             });
         } else {
-            agendar(envio, email);
+            agendar(envio, email, tipo);
         }
     }
 
-    private void agendar(Runnable envio, EmailMontado email) {
+    private void agendar(Runnable envio, EmailMontado email, String tipo) {
         try {
             executor.execute(envio);
         } catch (RejectedExecutionException e) {
-            log.warn("E-mail de verificação para {} não agendado: executor recusou", EnderecosEmail.mascarar(email.destinatario()));
+            log.warn("E-mail de {} para {} não agendado: executor recusou", tipo, EnderecosEmail.mascarar(email.destinatario()));
         }
     }
 
-    private void enviarAgora(EmailMontado email) {
+    private void enviarAgora(EmailMontado email, String tipo) {
         String destino = EnderecosEmail.mascarar(email.destinatario());
         try {
             MimeMessage mensagem = mailSender.createMimeMessage();
@@ -112,10 +129,10 @@ public class SmtpEnvioEmailAdapter implements EnvioEmailPort, AutoCloseable {
             helper.setSubject(email.assunto());
             helper.setText(email.texto(), email.html());
             mailSender.send(mensagem);
-            log.info("E-mail de verificação enviado para {}", destino);
+            log.info("E-mail de {} enviado para {}", tipo, destino);
         } catch (Exception e) {
             // Só a classe da exceção: a mensagem do SMTP pode repetir o destinatário
-            log.warn("Falha ao enviar e-mail de verificação para {}: {}", destino, e.getClass().getSimpleName());
+            log.warn("Falha ao enviar e-mail de {} para {}: {}", tipo, destino, e.getClass().getSimpleName());
         }
     }
 

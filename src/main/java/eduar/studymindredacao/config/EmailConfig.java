@@ -1,7 +1,10 @@
 package eduar.studymindredacao.config;
 
 import eduar.studymindredacao.adapter.out.email.EnvioEmailDesligadoAdapter;
+import eduar.studymindredacao.adapter.out.email.ModeloEmailRedefinicaoSenha;
+import eduar.studymindredacao.adapter.out.email.ModeloEmailSenhaAlterada;
 import eduar.studymindredacao.adapter.out.email.ModeloEmailVerificacao;
+import eduar.studymindredacao.adapter.out.email.ModelosEmail;
 import eduar.studymindredacao.adapter.out.email.SmtpEnvioEmailAdapter;
 import eduar.studymindredacao.application.usecase.PoliticaVerificacaoEmail;
 import eduar.studymindredacao.domain.port.EnvioEmailPort;
@@ -27,13 +30,15 @@ public class EmailConfig {
     EnvioEmailPort envioEmailPort(
             @Value("${app.email.habilitado}") String habilitado,
             @Value("${app.email.verificacao-validade}") String validade,
+            @Value("${app.email.redefinicao-validade}") String validadeRedefinicao,
             @Value("${app.email.fila-maxima}") int filaMaxima,
             @Value("${spring.mail.username:}") String remetente,
             @Value("${app.email.remetente-nome:Kelly Academy}") String nomeRemetente,
             ObjectProvider<JavaMailSender> mailSender
     ) {
         return criar(Boolean.parseBoolean(habilitado == null ? "" : habilitado.strip()),
-                validadeVerificacao(validade), filaMaxima, remetente, nomeRemetente, mailSender::getObject);
+                validadeVerificacao(validade), validadeRedefinicao(validadeRedefinicao), filaMaxima, remetente,
+                nomeRemetente, mailSender::getObject);
     }
 
     @Bean
@@ -49,6 +54,7 @@ public class EmailConfig {
     static EnvioEmailPort criar(
             boolean habilitado,
             Duration validade,
+            Duration validadeRedefinicao,
             int filaMaxima,
             String remetente,
             String nomeRemetente,
@@ -63,19 +69,32 @@ public class EmailConfig {
                 SmtpEnvioEmailAdapter.criarExecutor(filaMaxima),
                 remetente,
                 nomeRemetente,
-                new ModeloEmailVerificacao(validade)
+                new ModelosEmail(
+                        new ModeloEmailVerificacao(validade),
+                        new ModeloEmailRedefinicaoSenha(validadeRedefinicao),
+                        new ModeloEmailSenhaAlterada()
+                )
         );
     }
 
     static Duration validadeVerificacao(String valor) {
+        return lerValidade(valor, "app.email.verificacao-validade", "PT24H");
+    }
+
+    /** Validade do link de "Esqueci minha senha". Também usada pelo caso de uso (bloco 5) para o token. */
+    public static Duration validadeRedefinicao(String valor) {
+        return lerValidade(valor, "app.email.redefinicao-validade", "PT30M");
+    }
+
+    private static Duration lerValidade(String valor, String propriedade, String exemplo) {
         try {
             Duration validade = Duration.parse(valor == null ? "" : valor.strip());
             if (validade.isZero() || validade.isNegative()) {
-                throw new IllegalStateException("app.email.verificacao-validade deve ser positiva");
+                throw new IllegalStateException(propriedade + " deve ser positiva");
             }
             return validade;
         } catch (DateTimeParseException e) {
-            throw new IllegalStateException("app.email.verificacao-validade inválida (use ISO-8601, ex.: PT24H)", e);
+            throw new IllegalStateException(propriedade + " inválida (use ISO-8601, ex.: " + exemplo + ")", e);
         }
     }
 }

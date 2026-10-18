@@ -1,5 +1,7 @@
 package eduar.studymindredacao.adapter.out.email;
 
+import eduar.studymindredacao.domain.model.MensagemRedefinicaoSenha;
+import eduar.studymindredacao.domain.model.MensagemSenhaAlterada;
 import eduar.studymindredacao.domain.model.MensagemVerificacaoEmail;
 import jakarta.mail.BodyPart;
 import jakarta.mail.Multipart;
@@ -14,6 +16,8 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -27,6 +31,16 @@ class SmtpEnvioEmailAdapterTest {
     private static final String TOKEN = "TokenSecreto_123-abc";
     private static final String LINK = "https://kellyacademy.com.br/verificar-email#token=" + TOKEN;
     private static final MensagemVerificacaoEmail MENSAGEM = new MensagemVerificacaoEmail("ana@exemplo.com", "Ana", LINK);
+    private static final String LINK_REDEFINICAO = "https://kellyacademy.com.br/redefinir-senha#token=" + TOKEN;
+    private static final MensagemRedefinicaoSenha REDEFINICAO =
+            new MensagemRedefinicaoSenha("ana@exemplo.com", "Ana", LINK_REDEFINICAO);
+    private static final MensagemSenhaAlterada AVISO = new MensagemSenhaAlterada("ana@exemplo.com", "Ana",
+            OffsetDateTime.of(2026, 10, 18, 17, 5, 0, 0, ZoneOffset.UTC), "https://kellyacademy.com.br/esqueci-senha");
+    private static final ModelosEmail MODELOS = new ModelosEmail(
+            new ModeloEmailVerificacao(Duration.ofHours(24)),
+            new ModeloEmailRedefinicaoSenha(Duration.ofMinutes(30)),
+            new ModeloEmailSenhaAlterada()
+    );
 
     /** Não abre conexão: guarda as mensagens ou falha como um SMTP fora do ar. */
     static class MailSenderFalso extends JavaMailSenderImpl {
@@ -46,7 +60,7 @@ class SmtpEnvioEmailAdapterTest {
 
     private SmtpEnvioEmailAdapter adapterSincrono() {
         return new SmtpEnvioEmailAdapter(sender, Runnable::run, "kellyacademy@gmail.com", "Kelly Academy",
-                new ModeloEmailVerificacao(Duration.ofHours(24)));
+                MODELOS);
     }
 
     @AfterEach
@@ -136,7 +150,7 @@ class SmtpEnvioEmailAdapterTest {
     void executorRecusandoNaoDerrubaQuemChamou() {
         var adapter = new SmtpEnvioEmailAdapter(sender, tarefa -> {
             throw new java.util.concurrent.RejectedExecutionException("cheio");
-        }, "kellyacademy@gmail.com", "Kelly Academy", new ModeloEmailVerificacao(Duration.ofHours(24)));
+        }, "kellyacademy@gmail.com", "Kelly Academy", MODELOS);
 
         assertThatCode(() -> adapter.enviarVerificacao(MENSAGEM)).doesNotThrowAnyException();
         assertThat(sender.enviadas).isEmpty();
@@ -167,7 +181,7 @@ class SmtpEnvioEmailAdapterTest {
     void closeEsperaOsEnviosDaFilaEEncerraOExecutor() {
         var executor = SmtpEnvioEmailAdapter.criarExecutor(10);
         var adapter = new SmtpEnvioEmailAdapter(sender, executor, "kellyacademy@gmail.com", "Kelly Academy",
-                new ModeloEmailVerificacao(Duration.ofHours(24)));
+                MODELOS);
 
         adapter.enviarVerificacao(MENSAGEM);
         adapter.close();
@@ -179,7 +193,7 @@ class SmtpEnvioEmailAdapterTest {
     @Test
     void exigeRemetente() {
         assertThatThrownBy(() -> new SmtpEnvioEmailAdapter(sender, Runnable::run, " ", "Kelly Academy",
-                new ModeloEmailVerificacao(Duration.ofHours(1))))
+                MODELOS))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("MAIL_USERNAME");
     }
@@ -206,6 +220,62 @@ class SmtpEnvioEmailAdapterTest {
             latch.await(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    // ---------- redefinição de senha e aviso de senha alterada ----------
+
+    @Test
+    void redefinicaoSaiComAssuntoELinkSoDepoisDoCommit() throws Exception {
+        TransactionSynchronizationManager.initSynchronization();
+
+        adapterSincrono().enviarRedefinicaoSenha(REDEFINICAO);
+        assertThat(sender.enviadas).as("antes do commit").isEmpty();
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+
+        assertThat(sender.enviadas).hasSize(1);
+        assertThat(sender.enviadas.get(0).getSubject()).isEqualTo(ModeloEmailRedefinicaoSenha.ASSUNTO);
+        List<String> partes = new ArrayList<>();
+        coletarTextos(sender.enviadas.get(0), partes);
+        assertThat(partes).anySatisfy(p -> assertThat(p).contains(LINK_REDEFINICAO));
+    }
+
+    @Test
+    void avisoDeSenhaAlteradaSaiSoDepoisDoCommit() throws Exception {
+        TransactionSynchronizationManager.initSynchronization();
+
+        adapterSincrono().enviarAvisoSenhaAlterada(AVISO);
+        assertThat(sender.enviadas).as("antes do commit").isEmpty();
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
+
+        assertThat(sender.enviadas).hasSize(1);
+        assertThat(sender.enviadas.get(0).getSubject()).isEqualTo(ModeloEmailSenhaAlterada.ASSUNTO);
+    }
+
+    @Test
+    void transacaoDesfeitaNaoEnviaRedefinicaoNemAviso() {
+        TransactionSynchronizationManager.initSynchronization();
+
+        adapterSincrono().enviarRedefinicaoSenha(REDEFINICAO);
+        adapterSincrono().enviarAvisoSenhaAlterada(AVISO);
+        TransactionSynchronizationManager.getSynchronizations()
+                .forEach(s -> s.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+        assertThat(sender.enviadas).isEmpty();
+    }
+
+    @Test
+    void falhaNaRedefinicaoNaoSobeENaoVazaTokenNemEmail() {
+        sender.falhar = true;
+
+        try (var logs = new LogsCapturados(SmtpEnvioEmailAdapter.class)) {
+            assertThatCode(() -> adapterSincrono().enviarRedefinicaoSenha(REDEFINICAO)).doesNotThrowAnyException();
+
+            assertThat(logs.tudo())
+                    .contains("Falha ao enviar e-mail de redefinição de senha")
+                    .contains("***@exemplo.com")
+                    .doesNotContain(TOKEN)
+                    .doesNotContain("ana@exemplo.com");
         }
     }
 }

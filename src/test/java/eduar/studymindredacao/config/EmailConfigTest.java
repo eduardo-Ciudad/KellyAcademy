@@ -27,14 +27,14 @@ class EmailConfigTest {
 
     @Test
     void emailDesligadoUsaOAdapterQueNaoEnvia() {
-        var porta = EmailConfig.criar(false, Duration.ofHours(24), 100, "", "Kelly Academy", providerQueNaoPodeSerUsado());
+        var porta = EmailConfig.criar(false, Duration.ofHours(24), Duration.ofMinutes(30), 100, "", "Kelly Academy", providerQueNaoPodeSerUsado());
 
         assertThat(porta).isInstanceOf(EnvioEmailDesligadoAdapter.class);
     }
 
     @Test
     void emailLigadoUsaSmtp() throws Exception {
-        var porta = EmailConfig.criar(true, Duration.ofHours(24), 100, "kellyacademy@gmail.com", "Kelly Academy",
+        var porta = EmailConfig.criar(true, Duration.ofHours(24), Duration.ofMinutes(30), 100, "kellyacademy@gmail.com", "Kelly Academy",
                 provider(new JavaMailSenderImpl()));
 
         assertThat(porta).isInstanceOf(SmtpEnvioEmailAdapter.class);
@@ -57,5 +57,20 @@ class EmailConfigTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> EmailConfig.validadeVerificacao(null))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void leValidadeDaRedefinicaoDeSenha() {
+        assertThat(EmailConfig.validadeRedefinicao("PT30M")).isEqualTo(Duration.ofMinutes(30));
+    }
+
+    @Test
+    void recusaValidadeDaRedefinicaoInvalidaComONomeDaPropriedade() {
+        assertThatThrownBy(() -> EmailConfig.validadeRedefinicao("30min"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("app.email.redefinicao-validade")
+                .hasMessageContaining("PT30M");
+        assertThatThrownBy(() -> EmailConfig.validadeRedefinicao("PT0S"))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("positiva");
     }
 }
