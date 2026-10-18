@@ -6,6 +6,7 @@ import eduar.studymindredacao.adapter.out.email.ModeloEmailSenhaAlterada;
 import eduar.studymindredacao.adapter.out.email.ModeloEmailVerificacao;
 import eduar.studymindredacao.adapter.out.email.ModelosEmail;
 import eduar.studymindredacao.adapter.out.email.SmtpEnvioEmailAdapter;
+import eduar.studymindredacao.application.usecase.PoliticaRedefinicaoSenha;
 import eduar.studymindredacao.application.usecase.PoliticaVerificacaoEmail;
 import eduar.studymindredacao.domain.port.EnvioEmailPort;
 import org.springframework.beans.factory.ObjectProvider;
@@ -49,6 +50,16 @@ public class EmailConfig {
     ) {
         return new PoliticaVerificacaoEmail(Boolean.parseBoolean(habilitado == null ? "" : habilitado.strip()),
                 validadeVerificacao(validade), frontendUrl);
+    }
+
+    @Bean
+    PoliticaRedefinicaoSenha politicaRedefinicaoSenha(
+            @Value("${app.email.habilitado}") String habilitado,
+            @Value("${app.email.redefinicao-validade}") String validade,
+            @Value("${app.frontend-url:}") String frontendUrl
+    ) {
+        return new PoliticaRedefinicaoSenha(Boolean.parseBoolean(habilitado == null ? "" : habilitado.strip()),
+                validadeRedefinicao(validade), frontendUrl);
     }
 
     static EnvioEmailPort criar(
