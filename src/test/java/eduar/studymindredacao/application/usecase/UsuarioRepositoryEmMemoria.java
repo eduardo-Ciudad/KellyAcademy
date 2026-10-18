@@ -17,7 +17,7 @@ class UsuarioRepositoryEmMemoria implements UsuarioRepositoryPort {
         UUID id = usuario.id() != null ? usuario.id() : UUID.randomUUID();
         OffsetDateTime criadoEm = usuario.criadoEm() != null ? usuario.criadoEm() : OffsetDateTime.now();
         var salvo = new Usuario(id, usuario.nome(), usuario.email(), usuario.senhaHash(), usuario.role(), criadoEm,
-                usuario.emailVerificadoEm());
+                usuario.emailVerificadoEm(), usuario.versaoSessao(), usuario.senhaAlteradaEm());
         usuarios.put(id, salvo);
         return salvo;
     }

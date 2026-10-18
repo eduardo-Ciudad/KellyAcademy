@@ -63,6 +63,14 @@ class CadastrarUsuarioServiceTest {
     }
 
     @Test
+    void rejeitaSenhaComAcentosAcimaDe72Bytes() {
+        // 37 caracteres, mas 74 bytes: o BCrypt ignoraria o final em silêncio
+        assertThatThrownBy(() -> service.cadastrar("Eduardo", "edu@exemplo.com", "á".repeat(37)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(repository.existePorEmail("edu@exemplo.com")).isFalse();
+    }
+
+    @Test
     void cadastroFechadoRecusaEmailForaDaListaSemGravarNada() {
         var fechado = novoService(PoliticaCadastro.de(false, "amigo@exemplo.com"));
 

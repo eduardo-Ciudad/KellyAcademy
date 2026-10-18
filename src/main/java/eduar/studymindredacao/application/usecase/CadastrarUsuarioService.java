@@ -2,6 +2,7 @@ package eduar.studymindredacao.application.usecase;
 
 import eduar.studymindredacao.domain.exception.CadastroFechadoException;
 import eduar.studymindredacao.domain.exception.EmailJaCadastradoException;
+import eduar.studymindredacao.domain.model.PoliticaSenha;
 import eduar.studymindredacao.domain.model.Usuario;
 import eduar.studymindredacao.domain.model.enums.Role;
 import eduar.studymindredacao.domain.port.SenhaEncoderPort;
@@ -14,9 +15,6 @@ import java.time.OffsetDateTime;
 
 @Service
 public class CadastrarUsuarioService {
-    static final int SENHA_TAMANHO_MINIMO = 8;
-    static final int SENHA_TAMANHO_MAXIMO = 72; // limite do BCrypt
-
     private final UsuarioRepositoryPort usuarioRepository;
     private final SenhaEncoderPort senhaEncoder;
     private final PoliticaCadastro politica;
@@ -39,7 +37,7 @@ public class CadastrarUsuarioService {
 
     @Transactional
     public Usuario cadastrar(String nome, String email, String senha) {
-        validarSenha(senha);
+        PoliticaSenha.validar(senha);
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("email é obrigatório");
         }
@@ -68,13 +66,5 @@ public class CadastrarUsuarioService {
         // Mesma transação: se o cadastro falhar depois daqui, o token some junto e o e-mail não sai (afterCommit)
         verificacaoEmail.emitirPara(salvo);
         return salvo;
-    }
-
-    private static void validarSenha(String senha) {
-        if (senha == null || senha.length() < SENHA_TAMANHO_MINIMO || senha.length() > SENHA_TAMANHO_MAXIMO) {
-            throw new IllegalArgumentException(
-                    "senha deve ter entre " + SENHA_TAMANHO_MINIMO + " e " + SENHA_TAMANHO_MAXIMO + " caracteres"
-            );
-        }
     }
 }
