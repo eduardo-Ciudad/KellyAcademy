@@ -39,6 +39,8 @@ public class SecurityConfig {
                                 "/auth/cadastro", "/auth/login", "/auth/verificar-email", "/auth/reenviar-verificacao",
                                 "/auth/esqueci-senha", "/auth/redefinir-senha"
                         ).permitAll()
+                        // Sem JWT: o Stripe se identifica pelo header Stripe-Signature (HMAC), conferido no caso de uso
+                        .requestMatchers(HttpMethod.POST, "/webhooks/stripe").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )

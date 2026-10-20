@@ -19,6 +19,7 @@ import eduar.studymindredacao.domain.exception.TemaNaoAdicionavelException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.TokenInvalidoException;
 import eduar.studymindredacao.domain.exception.TranscricaoIAException;
+import eduar.studymindredacao.domain.exception.WebhookInvalidoException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -223,6 +224,12 @@ public class GlobalExceptionHandler {
                 "Pagamento indisponível no momento. Tente novamente em alguns minutos.");
         problema.setProperty("codigo", CODIGO_PAGAMENTO_INDISPONIVEL);
         return problema;
+    }
+
+    // Sem detalhe: quem tenta forjar o webhook não aprende nada com a resposta (e o Stripe não repete um 400)
+    @ExceptionHandler(WebhookInvalidoException.class)
+    public ProblemDetail webhookInvalido(WebhookInvalidoException ex) {
+        return ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
     }
 
     long segundosAteAmanha() {
