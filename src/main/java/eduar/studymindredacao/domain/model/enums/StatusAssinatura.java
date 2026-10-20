@@ -19,4 +19,9 @@ public enum StatusAssinatura {
     public boolean concedeAcesso() {
         return concedeAcesso;
     }
+
+    /** Assinatura que não volta mais: o aluno pode assinar de novo. */
+    public boolean encerrada() {
+        return this == CANCELED || this == INCOMPLETE_EXPIRED;
+    }
 }
