@@ -1,6 +1,7 @@
 package eduar.studymindredacao.adapter.in.web;
 
 import eduar.studymindredacao.adapter.in.web.security.TentativasExcedidasException;
+import eduar.studymindredacao.domain.exception.AssinaturaExistenteException;
 import eduar.studymindredacao.domain.exception.AvaliacaoIAException;
 import eduar.studymindredacao.domain.exception.CadastroFechadoException;
 import eduar.studymindredacao.domain.exception.CredenciaisInvalidasException;
@@ -10,6 +11,7 @@ import eduar.studymindredacao.domain.exception.ImagemInvalidaException;
 import eduar.studymindredacao.domain.exception.ImagemNaoReconhecidaException;
 import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
+import eduar.studymindredacao.domain.exception.PagamentoIndisponivelException;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.exception.RepertorioNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.SenhaAtualIncorretaException;
@@ -42,6 +44,8 @@ public class GlobalExceptionHandler {
     static final String CODIGO_EMAIL_NAO_VERIFICADO = "EMAIL_NAO_VERIFICADO";
     static final String CODIGO_TOKEN_INVALIDO = "TOKEN_INVALIDO";
     static final String CODIGO_SENHA_ATUAL_INCORRETA = "SENHA_ATUAL_INCORRETA";
+    static final String CODIGO_ASSINATURA_EXISTENTE = "ASSINATURA_EXISTENTE";
+    static final String CODIGO_PAGAMENTO_INDISPONIVEL = "PAGAMENTO_INDISPONIVEL";
 
     private final Clock clock;
 
@@ -202,6 +206,23 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_GATEWAY,
                 "Não foi possível ler a foto agora. Tente novamente em alguns minutos; esta tentativa não foi descontada do seu limite."
         );
+    }
+
+    // 409 com código: o front mostra "gerenciar assinatura" em vez do botão de assinar
+    @ExceptionHandler(AssinaturaExistenteException.class)
+    public ProblemDetail assinaturaExistente(AssinaturaExistenteException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_ASSINATURA_EXISTENTE);
+        return problema;
+    }
+
+    // Mensagem fixa: a exceção carrega o motivo técnico do Stripe, que vai só para o log do adapter
+    @ExceptionHandler(PagamentoIndisponivelException.class)
+    public ProblemDetail pagamentoIndisponivel(PagamentoIndisponivelException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "Pagamento indisponível no momento. Tente novamente em alguns minutos.");
+        problema.setProperty("codigo", CODIGO_PAGAMENTO_INDISPONIVEL);
+        return problema;
     }
 
     long segundosAteAmanha() {
