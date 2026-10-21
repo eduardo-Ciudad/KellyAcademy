@@ -1,7 +1,4 @@
-# Backend + PostgreSQL. Todos os valores vêm do arquivo .env (copie de .env.example e preencha tudo).
-# Subir:   docker compose up -d --build
-# Logs:    docker compose logs -f api
-# Parar:   docker compose down          (os dados ficam no volume pgdata)
+
 name: studymind-redacao
 
 services:
@@ -14,7 +11,6 @@ services:
       TZ: ${TZ}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    # Preso ao 127.0.0.1: o banco não fica exposto para a rede (acesse por túnel SSH na VPS)
     ports:
       - "127.0.0.1:${DB_PORTA_HOST}:5432"
     healthcheck:
@@ -55,11 +51,15 @@ services:
       MAIL_REMETENTE_NOME: ${MAIL_REMETENTE_NOME}
       APP_FRONTEND_URL: ${APP_FRONTEND_URL}
       FORWARD_HEADERS: ${FORWARD_HEADERS}
+      PAGAMENTO_HABILITADO: ${PAGAMENTO_HABILITADO}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_PRECO_PRO_MENSAL: ${STRIPE_PRECO_PRO_MENSAL}
+      STRIPE_PRECO_PRO_ANUAL: ${STRIPE_PRECO_PRO_ANUAL}
+      STRIPE_LOGO_FILE: ${STRIPE_LOGO_FILE}
       TZ: ${TZ}
-    # API_BIND=127.0.0.1 quando houver proxy com HTTPS na frente; 0.0.0.0 para acesso direto pela porta
     ports:
       - "${API_BIND}:${API_PORTA_HOST}:8080"
-    # Uma correção pode levar até ~140 s: dá tempo de terminar antes do container ser morto no stop/deploy
     stop_grace_period: 150s
     restart: unless-stopped
 
