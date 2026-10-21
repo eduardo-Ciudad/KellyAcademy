@@ -2,9 +2,10 @@ package eduar.studymindredacao.domain.julia;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 
 public record MensagemJulia(
-        Long id,
+        UUID id,
         PapelMensagem papel,
         String conteudo,
         Integer tokensEntrada,
