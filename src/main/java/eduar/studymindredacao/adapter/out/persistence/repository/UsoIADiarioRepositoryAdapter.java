@@ -96,4 +96,31 @@ public class UsoIADiarioRepositoryAdapter implements UsoIADiarioRepositoryPort {
     public void registrarTokens(UUID usuarioId, LocalDate data, int tokensEntrada, int tokensSaida) {
         repository.registrarTokens(usuarioId, data, tokensEntrada, tokensSaida);
     }
+
+    @Override
+    @Transactional
+    public boolean reservarMensagemJulia(UUID usuarioId, LocalDate data, int limite) {
+        if (limite <= 0) {
+            return false;
+        }
+        return repository.reservarMensagemJulia(usuarioId, data, limite) == 1;
+    }
+
+    @Override
+    @Transactional
+    public void liberarMensagemJulia(UUID usuarioId, LocalDate data) {
+        repository.liberarMensagemJulia(usuarioId, data);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public int somarMensagensJuliaDoDia(LocalDate data) {
+        return repository.somarMensagensJuliaDoDia(data);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public int contarMensagensJulia(UUID usuarioId, LocalDate data) {
+        return repository.contarMensagensJulia(usuarioId, data);
+    }
 }

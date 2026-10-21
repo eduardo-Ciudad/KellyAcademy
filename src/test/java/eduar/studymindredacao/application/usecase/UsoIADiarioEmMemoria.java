@@ -15,6 +15,7 @@ class UsoIADiarioEmMemoria implements UsoIADiarioRepositoryPort {
     }
 
     private final Map<Chave, UsoIADiario> usos = new HashMap<>();
+    private final Map<Chave, Integer> mensagensJulia = new HashMap<>();
 
     @Override
     public UsoIADiario salvar(UsoIADiario uso) {
@@ -88,6 +89,35 @@ class UsoIADiarioEmMemoria implements UsoIADiarioRepositoryPort {
         var atual = usoDoDia(usuarioId, data);
         salvar(new UsoIADiario(atual.id(), usuarioId, data, atual.tokensEntrada() + tokensEntrada,
                 atual.tokensSaida() + tokensSaida, atual.qtdCorrecoes(), atual.qtdRoadmaps(), atual.qtdTranscricoes()));
+    }
+
+    @Override
+    public boolean reservarMensagemJulia(UUID usuarioId, LocalDate data, int limite) {
+        var chave = new Chave(usuarioId, data);
+        int atual = mensagensJulia.getOrDefault(chave, 0);
+        if (limite <= 0 || atual >= limite) {
+            return false;
+        }
+        mensagensJulia.put(chave, atual + 1);
+        return true;
+    }
+
+    @Override
+    public void liberarMensagemJulia(UUID usuarioId, LocalDate data) {
+        mensagensJulia.computeIfPresent(new Chave(usuarioId, data), (chave, qtd) -> Math.max(qtd - 1, 0));
+    }
+
+    @Override
+    public int somarMensagensJuliaDoDia(LocalDate data) {
+        return mensagensJulia.entrySet().stream()
+                .filter(e -> data.equals(e.getKey().data()))
+                .mapToInt(Map.Entry::getValue)
+                .sum();
+    }
+
+    @Override
+    public int contarMensagensJulia(UUID usuarioId, LocalDate data) {
+        return mensagensJulia.getOrDefault(new Chave(usuarioId, data), 0);
     }
 
     UsoIADiario usoDoDia(UUID usuarioId, LocalDate data) {
