@@ -27,8 +27,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(RepertorioRepositoryAdapter.class)
 class RepertorioRepositoryAdapterIntegrationTest {
-    /** Ativos no seed atual: 12 CF + 13 EVD + 38 REP. Muda quando o lote REP-001 a 024 (#19) entrar. */
-    private static final int ATIVOS_NO_SEED = 63;
+    /** Ativos no seed atual (até V22). Atualizar quando entrar novo lote de repertório. */
+    private static final int ATIVOS_NO_SEED = 108;
+    /** LEGAL_SOURCE ativos no seed atual (CF + leis dos REP). */
+    private static final int LEIS_NO_SEED = 37;
+    private static final int TOTAL_PAGINAS =
+            (ATIVOS_NO_SEED + FiltroRepertorio.TAMANHO_PADRAO - 1) / FiltroRepertorio.TAMANHO_PADRAO;
 
     @Autowired
     private RepertorioRepositoryPort repertorios;
@@ -39,7 +43,7 @@ class RepertorioRepositoryAdapterIntegrationTest {
 
         assertThat(primeira.totalItens()).isEqualTo(ATIVOS_NO_SEED);
         assertThat(primeira.itens()).hasSize(FiltroRepertorio.TAMANHO_PADRAO);
-        assertThat(primeira.totalPaginas()).isEqualTo(4);
+        assertThat(primeira.totalPaginas()).isEqualTo(TOTAL_PAGINAS);
         assertThat(primeira.itens()).allMatch(Repertorio::ativo);
         // Só a 1ª letra: o desempate fino (espaço, pontuação, "º") segue a collation do Postgres, não a do Java
         assertThat(primeira.itens().stream().map(r -> semAcento(r.nome()).substring(0, 1)).toList()).isSorted();
@@ -49,16 +53,16 @@ class RepertorioRepositoryAdapterIntegrationTest {
     void paginasNaoRepetemItens() {
         var primeira = repertorios.buscar(FiltroRepertorio.semFiltros(0));
         var segunda = repertorios.buscar(FiltroRepertorio.semFiltros(1));
-        var ultima = repertorios.buscar(FiltroRepertorio.semFiltros(3));
+        var ultima = repertorios.buscar(FiltroRepertorio.semFiltros(TOTAL_PAGINAS - 1));
 
         assertThat(codigos(segunda.itens())).doesNotContainAnyElementsOf(codigos(primeira.itens()));
-        assertThat(ultima.itens()).hasSize(ATIVOS_NO_SEED - 3 * FiltroRepertorio.TAMANHO_PADRAO);
+        assertThat(ultima.itens()).hasSize(ATIVOS_NO_SEED - (TOTAL_PAGINAS - 1) * FiltroRepertorio.TAMANHO_PADRAO);
         assertThat(ultima.temProxima()).isFalse();
     }
 
     @Test
     void paginaAlemDoFimVemVaziaComTotal() {
-        var pagina = repertorios.buscar(FiltroRepertorio.semFiltros(10));
+        var pagina = repertorios.buscar(FiltroRepertorio.semFiltros(TOTAL_PAGINAS + 5));
 
         assertThat(pagina.itens()).isEmpty();
         assertThat(pagina.totalItens()).isEqualTo(ATIVOS_NO_SEED);
@@ -68,7 +72,7 @@ class RepertorioRepositoryAdapterIntegrationTest {
     void filtraPorTipo() {
         var pagina = repertorios.buscar(filtro(null, null, TipoEntidade.LEGAL_SOURCE, null, null));
 
-        assertThat(pagina.totalItens()).isEqualTo(12);
+        assertThat(pagina.totalItens()).isEqualTo(LEIS_NO_SEED);
         assertThat(pagina.itens()).allMatch(r -> r.tipoEntidade() == TipoEntidade.LEGAL_SOURCE);
     }
 
@@ -118,7 +122,7 @@ class RepertorioRepositoryAdapterIntegrationTest {
     void buscaTrataPorcentagemComoTextoLiteral() {
         var pagina = repertorios.buscar(filtro(null, null, null, null, "%"));
 
-        // Sem o escape, "%" casaria com todos os 63; com ele, só os que têm "%" no texto (dados das EVD)
+        // Sem o escape, "%" casaria com todos os ativos; com ele, só os que têm "%" no texto (dados das EVD)
         assertThat(pagina.totalItens()).isPositive().isLessThan(ATIVOS_NO_SEED);
         assertThat(pagina.itens()).allMatch(r -> r.nome().contains("%")
                 || (r.conteudo().ideiaCentral() != null && r.conteudo().ideiaCentral().contains("%"))
@@ -143,9 +147,15 @@ class RepertorioRepositoryAdapterIntegrationTest {
     }
 
     @Test
+    void loteRep001a024EstaAtivo() {
+        assertThat(repertorios.buscarAtivoPorCodigo("REP-001")).isPresent();
+        assertThat(repertorios.buscarAtivoPorCodigo("REP-024")).isPresent();
+        // REP-007, 015 e 020 entram inativos na V20 (fonte direta pendente): não podem aparecer
+        assertThat(repertorios.buscarAtivoPorCodigo("REP-007")).isEmpty();
+    }
+
+    @Test
     void codigoForaDaBaseVemVazio() {
-        // REP-001 a 024 ainda não entraram no seed (#19)
-        assertThat(repertorios.buscarAtivoPorCodigo("REP-001")).isEmpty();
         assertThat(repertorios.buscarAtivoPorCodigo("REP-999")).isEmpty();
     }
 
