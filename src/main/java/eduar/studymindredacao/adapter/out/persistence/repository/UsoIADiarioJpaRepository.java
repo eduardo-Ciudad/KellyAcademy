@@ -69,4 +69,32 @@ interface UsoIADiarioJpaRepository extends JpaRepository<UsoIADiarioEntity, UUID
 
     @Query(value = "SELECT COALESCE(SUM(qtd_transcricoes), 0) FROM uso_ia_diario WHERE data = :data", nativeQuery = true)
     int somarTranscricoesDoDia(@Param("data") LocalDate data);
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO uso_ia_diario (usuario_id, data, qtd_mensagens_julia)
+            VALUES (:usuarioId, :data, 1)
+            ON CONFLICT (usuario_id, data) DO UPDATE
+                SET qtd_mensagens_julia = uso_ia_diario.qtd_mensagens_julia + 1
+                WHERE uso_ia_diario.qtd_mensagens_julia < :limite
+            """, nativeQuery = true)
+    int reservarMensagemJulia(@Param("usuarioId") UUID usuarioId, @Param("data") LocalDate data, @Param("limite") int limite);
+
+    @Modifying
+    @Query(value = """
+            UPDATE uso_ia_diario
+               SET qtd_mensagens_julia = GREATEST(qtd_mensagens_julia - 1, 0)
+             WHERE usuario_id = :usuarioId AND data = :data
+            """, nativeQuery = true)
+    int liberarMensagemJulia(@Param("usuarioId") UUID usuarioId, @Param("data") LocalDate data);
+
+    @Query(value = "SELECT COALESCE(SUM(qtd_mensagens_julia), 0) FROM uso_ia_diario WHERE data = :data", nativeQuery = true)
+    int somarMensagensJuliaDoDia(@Param("data") LocalDate data);
+
+    @Query(value = """
+            SELECT COALESCE(MAX(qtd_mensagens_julia), 0)
+              FROM uso_ia_diario
+             WHERE usuario_id = :usuarioId AND data = :data
+            """, nativeQuery = true)
+    int contarMensagensJulia(@Param("usuarioId") UUID usuarioId, @Param("data") LocalDate data);
 }
