@@ -1,0 +1,1151 @@
+{
+  "info": {
+    "_postman_id": "cae6e6f2-5795-46e7-9aa8-9181205b7086",
+    "name": "StudyMind Redação — Júlia",
+    "description": "Assistente Júlia: conversa sobre a correção de uma redação (blocos 5 e 6).\n\nRode pelo Runner, na ordem. O setup cria dois alunos novos a cada execução.\n\n⚠️ A pasta 0 gasta 1 correção (Gemini da correção) para ter uma redação corrigida, e a pasta 2 gasta 2 perguntas da Júlia (Gemini da Júlia, chave JULIA_GEMINI_API_KEY).\n\nPré-requisitos: aplicação rodando com GEMINI_API_KEY, JULIA_GEMINI_API_KEY e JWT_SECRET. Ajuste `baseUrl` se não estiver em http://localhost:8080.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Texto da redação como string JSON (com aspas e quebras de linha escapadas) para usar nos corpos",
+          "pm.collectionVariables.set(\"textoRedacaoJson\", JSON.stringify(pm.collectionVariables.get(\"textoRedacao\")));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "senha",
+      "value": "senhaSegura123"
+    },
+    {
+      "key": "textoRedacao",
+      "value": "No filme \"Cinema Paradiso\", a sala de projeção de uma pequena cidade italiana é o espaço onde toda a comunidade se encontra, ri e se emociona junta. Essa imagem, porém, está distante da realidade de grande parte dos brasileiros, já que o acesso ao cinema no país continua concentrado em poucas regiões e em determinadas classes sociais. Diante disso, é necessário discutir a desigual distribuição das salas pelo território e o alto custo dos ingressos, fatores que impedem a democratização dessa forma de arte.\n\nEm primeiro lugar, a concentração geográfica das salas de exibição limita o contato da população com o cinema. Grande parte dos municípios brasileiros não possui nenhuma sala, e as existentes estão, em sua maioria, dentro de shoppings localizados em bairros centrais das capitais. Dessa forma, moradores de cidades pequenas e de periferias precisam percorrer longas distâncias para assistir a um filme, o que transforma uma atividade cultural em um privilégio. Como defendia o sociólogo Pierre Bourdieu, o capital cultural é distribuído de maneira desigual, e a ausência de equipamentos culturais próximos aprofunda essa diferença entre os grupos sociais.\n\nAlém disso, o preço elevado dos ingressos afasta as famílias de baixa renda. Somando o valor da entrada, do transporte e da alimentação, uma ida ao cinema pode comprometer uma parte significativa do orçamento de quem ganha um salário mínimo. Nesse contexto, muitos jovens crescem sem nunca ter frequentado uma sala de exibição, perdendo não apenas o lazer, mas também o contato com produções nacionais que retratam a própria realidade brasileira e estimulam o pensamento crítico.\n\nPortanto, cabe ao Ministério da Cultura, em parceria com as prefeituras, ampliar o número de salas públicas em cidades pequenas e bairros periféricos, por meio de editais que financiem a reforma de espaços já existentes, como escolas e centros comunitários, para que funcionem como cinemas de bairro. Ademais, o Governo Federal deve criar um programa de meia-entrada ampliada para estudantes da rede pública e famílias inscritas em programas sociais, com o objetivo de reduzir o custo das sessões. Assim, o cinema poderá cumprir, no Brasil, o papel de encontro coletivo representado em \"Cinema Paradiso\"."
+    },
+    {
+      "key": "textoRedacaoJson",
+      "value": ""
+    },
+    {
+      "key": "emailA",
+      "value": ""
+    },
+    {
+      "key": "emailB",
+      "value": ""
+    },
+    {
+      "key": "tokenA",
+      "value": ""
+    },
+    {
+      "key": "tokenB",
+      "value": ""
+    },
+    {
+      "key": "temaId",
+      "value": ""
+    },
+    {
+      "key": "redacaoId",
+      "value": ""
+    },
+    {
+      "key": "perguntaLonga",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Setup (alunos A e B + redação corrigida do A)",
+      "item": [
+        {
+          "name": "Cadastro aluno A",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/cadastro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "cadastro"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Aluno A\",\n  \"email\": \"{{emailA}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"emailA\", `alunoa.${Date.now()}@teste.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login aluno A",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailA}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenA\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cadastro aluno B",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/cadastro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "cadastro"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Aluno B\",\n  \"email\": \"{{emailB}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"emailB\", `alunob.${Date.now()}@teste.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login aluno B",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailB}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenB\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar temas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/temas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "temas"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "",
+                  "const temas = pm.response.json();",
+                  "pm.test(\"Traz os 8 temas oficiais do seed\", () => pm.expect(temas.length).to.be.at.least(8));",
+                  "pm.test(\"Ordenados do mais recente para o mais antigo\", () => {",
+                  "    const anos = temas.filter(t => t.ano).map(t => t.ano);",
+                  "    pm.expect(anos).to.eql([...anos].sort((a, b) => b - a));",
+                  "});",
+                  "const cinema = temas.find(t => t.ano === 2019);",
+                  "pm.test(\"Tema de 2019 (cinema) disponível\", () => pm.expect(cinema).to.be.an(\"object\"));",
+                  "pm.collectionVariables.set(\"temaId\", cinema.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enviar redação corrigida (201, gasta 1 correção)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"temaId\": \"{{temaId}}\",\n  \"tipo\": \"PRATICA\",\n  \"texto\": {{textoRedacaoJson}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Chama o Gemini de verdade e gasta 1 das 3 correções do dia do aluno A. Pode levar de 10 a 30 segundos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "",
+                  "const b = pm.response.json();",
+                  "pm.test(\"Redação avaliada com o tema escolhido\", () => {",
+                  "    pm.expect(b.status).to.eql(\"AVALIADA\");",
+                  "    pm.expect(b.tema.id).to.eql(pm.collectionVariables.get(\"temaId\"));",
+                  "    pm.expect(b.avaliacao).to.be.an(\"object\");",
+                  "});",
+                  "pm.test(\"5 competências, C1 a C5, só com notas oficiais\", () => {",
+                  "    const c = b.avaliacao.competencias;",
+                  "    pm.expect(c.map(x => x.numero)).to.eql([1, 2, 3, 4, 5]);",
+                  "    c.forEach(x => pm.expect([0, 40, 80, 120, 160, 200]).to.include(x.nota));",
+                  "    c.forEach(x => pm.expect(x.resumo).to.be.a(\"string\").and.not.empty);",
+                  "});",
+                  "pm.test(\"notaTotal é a soma das competências\", () => {",
+                  "    const soma = b.avaliacao.competencias.reduce((s, x) => s + x.nota, 0);",
+                  "    pm.expect(b.avaliacao.notaTotal).to.eql(soma);",
+                  "});",
+                  "pm.test(\"Não expõe dados internos da IA\", () => {",
+                  "    pm.expect(b.avaliacao).to.not.have.any.keys(\"modeloIa\", \"tokensEntrada\", \"tokensSaida\", \"respostaBrutaJson\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"redacaoId\", b.id);",
+                  "pm.collectionVariables.set(\"notaTotal\", b.avaliacao.notaTotal);",
+                  "console.log(\"Nota:\", b.avaliacao.notaTotal, \"| Diagnóstico:\", b.avaliacao.diagnostico);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Antes de perguntar",
+      "item": [
+        {
+          "name": "Conversa vazia (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"Sem mensagens\", () => pm.expect(b.mensagens).to.eql([]));",
+                  "pm.test(\"Limites cheios\", () => {",
+                  "    pm.expect(b.restantesConversa).to.eql(10);",
+                  "    pm.expect(b.restantesHoje).to.be.a(\"number\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar sem token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pergunta em branco (400, não gasta)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia/mensagens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia",
+                "mensagens"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pergunta\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Corpo é ProblemDetail\", () => {",
+                  "    const b = pm.response.json();",
+                  "    pm.expect(b.status).to.eql(400);",
+                  "    pm.expect(b.detail).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pergunta com 501 caracteres (400, não gasta)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia/mensagens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia",
+                "mensagens"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pergunta\": \"{{perguntaLonga}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"perguntaLonga\", \"a\".repeat(501));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Corpo é ProblemDetail\", () => {",
+                  "    const b = pm.response.json();",
+                  "    pm.expect(b.status).to.eql(400);",
+                  "    pm.expect(b.detail).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Redação inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{$guid}}/julia/mensagens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{$guid}}",
+                "julia",
+                "mensagens"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pergunta\": \"Por que perdi pontos?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Corpo é ProblemDetail\", () => {",
+                  "    const b = pm.response.json();",
+                  "    pm.expect(b.status).to.eql(404);",
+                  "    pm.expect(b.detail).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ID malformado (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/abc/julia",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "abc",
+                "julia"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Corpo é ProblemDetail\", () => {",
+                  "    const b = pm.response.json();",
+                  "    pm.expect(b.status).to.eql(400);",
+                  "    pm.expect(b.detail).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Conversa (gasta 2 perguntas da Júlia)",
+      "item": [
+        {
+          "name": "Primeira pergunta (200, chama o Gemini)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia/mensagens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia",
+                "mensagens"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pergunta\": \"Qual competência mais pesou na minha nota e por quê?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"Pergunta e resposta salvas, com id\", () => {",
+                  "    pm.expect(b.pergunta.id).to.be.a(\"string\");",
+                  "    pm.expect(b.pergunta.papel).to.eql(\"USUARIO\");",
+                  "    pm.expect(b.resposta.id).to.be.a(\"string\");",
+                  "    pm.expect(b.resposta.papel).to.eql(\"JULIA\");",
+                  "    pm.expect(b.resposta.conteudo).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "pm.test(\"Não expõe tokens\", () => pm.expect(b.resposta).to.not.have.any.keys(\"tokensEntrada\", \"tokensSaida\"));",
+                  "console.log(\"Júlia:\", b.resposta.conteudo);",
+                  "pm.test(\"Restam 9 na conversa\", () => pm.expect(b.restantesConversa).to.eql(9));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Segunda pergunta (200, usa o histórico)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia/mensagens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia",
+                "mensagens"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pergunta\": \"E como eu melhoro isso na próxima redação?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"Pergunta e resposta salvas, com id\", () => {",
+                  "    pm.expect(b.pergunta.id).to.be.a(\"string\");",
+                  "    pm.expect(b.pergunta.papel).to.eql(\"USUARIO\");",
+                  "    pm.expect(b.resposta.id).to.be.a(\"string\");",
+                  "    pm.expect(b.resposta.papel).to.eql(\"JULIA\");",
+                  "    pm.expect(b.resposta.conteudo).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "pm.test(\"Não expõe tokens\", () => pm.expect(b.resposta).to.not.have.any.keys(\"tokensEntrada\", \"tokensSaida\"));",
+                  "console.log(\"Júlia:\", b.resposta.conteudo);",
+                  "pm.test(\"Restam 8 na conversa\", () => pm.expect(b.restantesConversa).to.eql(8));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Conversa com 4 mensagens (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"4 mensagens, alternando aluno e Júlia\", () => {",
+                  "    pm.expect(b.mensagens.map(m => m.papel)).to.eql([\"USUARIO\", \"JULIA\", \"USUARIO\", \"JULIA\"]);",
+                  "});",
+                  "pm.test(\"Restam 8 na conversa\", () => pm.expect(b.restantesConversa).to.eql(8));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Isolamento entre alunos",
+      "item": [
+        {
+          "name": "Aluno B não vê a conversa do A (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Corpo é ProblemDetail\", () => {",
+                  "    const b = pm.response.json();",
+                  "    pm.expect(b.status).to.eql(404);",
+                  "    pm.expect(b.detail).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aluno B não pergunta na redação do A (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia/mensagens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia",
+                "mensagens"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenB}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pergunta\": \"Por que perdi pontos?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"Corpo é ProblemDetail\", () => {",
+                  "    const b = pm.response.json();",
+                  "    pm.expect(b.status).to.eql(404);",
+                  "    pm.expect(b.detail).to.be.a(\"string\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Logout",
+      "item": [
+        {
+          "name": "Encerrar sem token (401)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/julia/conversas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "julia",
+                "conversas"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Encerrar conversas (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/julia/conversas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "julia",
+                "conversas"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Depois do logout a conversa some (200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/redacoes/{{redacaoId}}/julia",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "redacoes",
+                "{{redacaoId}}",
+                "julia"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test(\"Sem mensagens e limite da conversa cheio\", () => {",
+                  "    pm.expect(b.mensagens).to.eql([]);",
+                  "    pm.expect(b.restantesConversa).to.eql(10);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Encerrar de novo não falha (204)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/julia/conversas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "julia",
+                "conversas"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenA}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

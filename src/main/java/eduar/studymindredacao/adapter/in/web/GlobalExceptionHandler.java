@@ -20,6 +20,11 @@ import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.TokenInvalidoException;
 import eduar.studymindredacao.domain.exception.TranscricaoIAException;
 import eduar.studymindredacao.domain.exception.WebhookInvalidoException;
+import eduar.studymindredacao.domain.julia.AcessoJuliaNegadoException;
+import eduar.studymindredacao.domain.julia.JuliaIndisponivelException;
+import eduar.studymindredacao.domain.julia.LimiteJuliaExcedidoException;
+import eduar.studymindredacao.domain.julia.PerguntaInvalidaException;
+import eduar.studymindredacao.domain.julia.RedacaoSemCorrecaoException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -47,6 +52,14 @@ public class GlobalExceptionHandler {
     static final String CODIGO_SENHA_ATUAL_INCORRETA = "SENHA_ATUAL_INCORRETA";
     static final String CODIGO_ASSINATURA_EXISTENTE = "ASSINATURA_EXISTENTE";
     static final String CODIGO_PAGAMENTO_INDISPONIVEL = "PAGAMENTO_INDISPONIVEL";
+    static final String CODIGO_JULIA_PLANO = "JULIA_PLANO";
+    static final String CODIGO_JULIA_SEM_CORRECAO = "JULIA_SEM_CORRECAO";
+    static final String CODIGO_JULIA_LIMITE_CONVERSA = "JULIA_LIMITE_CONVERSA";
+    static final String CODIGO_JULIA_LIMITE_DIARIO = "JULIA_LIMITE_DIARIO";
+    static final String CODIGO_JULIA_LIMITE_GLOBAL = "JULIA_LIMITE_GLOBAL";
+    static final String CODIGO_JULIA_INDISPONIVEL = "JULIA_INDISPONIVEL";
+    static final String MENSAGEM_JULIA_INDISPONIVEL =
+            "A Júlia não conseguiu responder agora. Sua pergunta não foi descontada. Tente novamente em instantes.";
 
     private final Clock clock;
 
@@ -230,6 +243,57 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(WebhookInvalidoException.class)
     public ProblemDetail webhookInvalido(WebhookInvalidoException ex) {
         return ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    // ---------- Júlia ----------
+
+    @ExceptionHandler(PerguntaInvalidaException.class)
+    public ProblemDetail perguntaInvalida(PerguntaInvalidaException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(AcessoJuliaNegadoException.class)
+    public ProblemDetail acessoJuliaNegado(AcessoJuliaNegadoException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_JULIA_PLANO);
+        return problema;
+    }
+
+    @ExceptionHandler(RedacaoSemCorrecaoException.class)
+    public ProblemDetail redacaoSemCorrecao(RedacaoSemCorrecaoException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_JULIA_SEM_CORRECAO);
+        return problema;
+    }
+
+    // Conversa: 429 sem Retry-After (o limite volta ao abrir outra conversa, não com o tempo).
+    // Dia do aluno: 429 + Retry-After até a meia-noite. Teto do sistema: 503, como na correção e na transcrição.
+    @ExceptionHandler(LimiteJuliaExcedidoException.class)
+    public ResponseEntity<ProblemDetail> limiteJulia(LimiteJuliaExcedidoException ex) {
+        return switch (ex.getTipo()) {
+            case CONVERSA -> ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(problemaJulia(HttpStatus.TOO_MANY_REQUESTS, ex, CODIGO_JULIA_LIMITE_CONVERSA));
+            case DIARIO_USUARIO -> ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(segundosAteAmanha()))
+                    .body(problemaJulia(HttpStatus.TOO_MANY_REQUESTS, ex, CODIGO_JULIA_LIMITE_DIARIO));
+            case GLOBAL -> ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(segundosAteAmanha()))
+                    .body(problemaJulia(HttpStatus.SERVICE_UNAVAILABLE, ex, CODIGO_JULIA_LIMITE_GLOBAL));
+        };
+    }
+
+    // Mensagem fixa: a exceção pode carregar detalhe do Gemini que não deve chegar ao aluno
+    @ExceptionHandler(JuliaIndisponivelException.class)
+    public ProblemDetail juliaIndisponivel(JuliaIndisponivelException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, MENSAGEM_JULIA_INDISPONIVEL);
+        problema.setProperty("codigo", CODIGO_JULIA_INDISPONIVEL);
+        return problema;
+    }
+
+    private static ProblemDetail problemaJulia(HttpStatus status, RuntimeException ex, String codigo) {
+        var problema = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
+        problema.setProperty("codigo", codigo);
+        return problema;
     }
 
     long segundosAteAmanha() {
