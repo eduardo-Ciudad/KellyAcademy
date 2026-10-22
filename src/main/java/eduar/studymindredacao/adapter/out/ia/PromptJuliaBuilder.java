@@ -35,6 +35,9 @@ class PromptJuliaBuilder {
         var texto = new StringBuilder();
         texto.append("<tema>").append(neutralizar(contexto.tema())).append("</tema>\n");
         texto.append("<nota_total>").append(contexto.notaTotal()).append("</nota_total>\n");
+        if (contexto.possuiDiagnostico()) {
+            texto.append("<diagnostico>").append(neutralizar(contexto.diagnostico())).append("</diagnostico>\n");
+        }
         if (contexto.possuiAjusteNota()) {
             texto.append("<ajuste_de_nota>").append(neutralizar(contexto.motivoAjusteNota())).append("</ajuste_de_nota>\n");
         }

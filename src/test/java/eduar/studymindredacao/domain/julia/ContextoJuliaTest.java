@@ -62,6 +62,22 @@ class ContextoJuliaTest {
     }
 
     @Test
+    void diagnosticoEmBrancoDeveVirarNulo() {
+        ContextoJulia contexto = contexto(cincoCompetencias(), "  \n ", null);
+
+        assertThat(contexto.diagnostico()).isNull();
+        assertThat(contexto.possuiDiagnostico()).isFalse();
+    }
+
+    @Test
+    void diagnosticoDeveSerGuardadoSemEspacosNasPontas() {
+        ContextoJulia contexto = contexto(cincoCompetencias(), "  A maior fragilidade está na C3.  ", null);
+
+        assertThat(contexto.diagnostico()).isEqualTo("A maior fragilidade está na C3.");
+        assertThat(contexto.possuiDiagnostico()).isTrue();
+    }
+
+    @Test
     void problemasNaoPodemSerAlteradosPorFora() {
         List<String> problemas = new ArrayList<>(List.of("tangenciamento"));
         CompetenciaContexto competencia = new CompetenciaContexto(2, 120, "x", problemas);
@@ -72,7 +88,12 @@ class ContextoJuliaTest {
     }
 
     private static ContextoJulia contexto(List<CompetenciaContexto> competencias, String motivoAjuste) {
-        return new ContextoJulia("Tema de teste", "Texto da redação.", 600, competencias, motivoAjuste);
+        return contexto(competencias, null, motivoAjuste);
+    }
+
+    private static ContextoJulia contexto(List<CompetenciaContexto> competencias, String diagnostico,
+                                          String motivoAjuste) {
+        return new ContextoJulia("Tema de teste", "Texto da redação.", 600, competencias, diagnostico, motivoAjuste);
     }
 
     private static List<CompetenciaContexto> cincoCompetencias() {

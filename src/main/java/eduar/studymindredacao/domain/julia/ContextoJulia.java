@@ -9,6 +9,7 @@ public record ContextoJulia(
         String textoRedacao,
         int notaTotal,
         List<CompetenciaContexto> competencias,
+        String diagnostico,
         String motivoAjusteNota
 ) {
     private static final int TOTAL_COMPETENCIAS = 5;
@@ -30,13 +31,21 @@ public record ContextoJulia(
         competencias = competencias.stream()
                 .sorted(Comparator.comparingInt(CompetenciaContexto::numero))
                 .toList();
-        motivoAjusteNota = (motivoAjusteNota == null || motivoAjusteNota.isBlank())
-                ? null
-                : motivoAjusteNota.strip();
+        diagnostico = textoOpcional(diagnostico);
+        motivoAjusteNota = textoOpcional(motivoAjusteNota);
+    }
+
+    public boolean possuiDiagnostico() {
+        return diagnostico != null;
     }
 
     public boolean possuiAjusteNota() {
         return motivoAjusteNota != null;
+    }
+
+    /** Campos opcionais: em branco vira nulo, para o prompt não ganhar marcação vazia. */
+    private static String textoOpcional(String valor) {
+        return (valor == null || valor.isBlank()) ? null : valor.strip();
     }
 
     private static void exigirTexto(String valor, String campo) {

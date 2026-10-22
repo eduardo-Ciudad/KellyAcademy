@@ -114,6 +114,6 @@ class GeminiJuliaAdapterTest {
                 new CompetenciaContexto(3, 80, "argumentos previsíveis", List.of("tese sem defesa")),
                 new CompetenciaContexto(4, 120, "", List.of()),
                 new CompetenciaContexto(5, 120, "falta detalhamento", List.of())
-        ), null);
+        ), null, null);
     }
 }
