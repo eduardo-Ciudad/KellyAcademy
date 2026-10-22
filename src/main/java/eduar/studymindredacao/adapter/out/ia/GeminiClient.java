@@ -3,10 +3,8 @@ package eduar.studymindredacao.adapter.out.ia;
 import eduar.studymindredacao.application.usecase.LogSeguro;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -18,18 +16,23 @@ import tools.jackson.databind.node.ObjectNode;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
  * Chamada ao generateContent do Gemini, compartilhada pelos adapters de IA.
  * Cuida do HTTP, do envelope da resposta e das novas tentativas; quem chama
- * só monta as partes (prompt, imagens) e interpreta o texto gerado.
+ * só monta as partes (prompt, imagens) ou a conversa e interpreta o texto gerado.
+ *
+ * <p>Não é @Component: o {@link GeminiConfig} cria uma instância por chave de API
+ * (correção/transcrição e Júlia, cada uma no seu projeto do Google Cloud).
  */
-@Component
 class GeminiClient {
     static final int MAX_TENTATIVAS = 2;
     /** Valores aceitos em generationConfig.thinkingConfig.thinkingLevel (Gemini 3.x). */
-    static final java.util.Set<String> NIVEIS_RACIOCINIO = java.util.Set.of("minimal", "low", "medium", "high");
+    static final Set<String> NIVEIS_RACIOCINIO = Set.of("minimal", "low", "medium", "high");
     private static final Logger log = LoggerFactory.getLogger(GeminiClient.class);
 
     private final RestClient restClient;
@@ -37,11 +40,7 @@ class GeminiClient {
     private final GeminiEnvelopeParser envelopeParser;
     private final String apiKey;
 
-    GeminiClient(
-            @Value("${gemini.base-url}") String baseUrl,
-            @Value("${gemini.api-key}") String apiKey,
-            @Value("${gemini.timeout-segundos}") int timeoutSegundos
-    ) {
+    GeminiClient(String baseUrl, String apiKey, int timeoutSegundos) {
         this.apiKey = apiKey;
         this.json = JsonMapper.builder().build();
         this.envelopeParser = new GeminiEnvelopeParser(json);
@@ -75,13 +74,79 @@ class GeminiClient {
      */
     <T> T gerar(String modelo, double temperatura, String raciocinio, List<GeminiParte> partes,
                 Function<GeminiResposta, T> interpretar) {
-        if (modelo == null || modelo.isBlank()) {
-            throw new IllegalArgumentException("modelo é obrigatório");
-        }
+        exigirModelo(modelo);
         if (partes == null || partes.isEmpty()) {
             throw new IllegalArgumentException("a requisição ao Gemini precisa de ao menos uma parte");
         }
-        String corpo = montarCorpo(partes, temperatura, raciocinio);
+        return enviar(modelo, montarCorpo(partes, temperatura, raciocinio), interpretar);
+    }
+
+    /**
+     * Conversa com instrução de sistema, histórico e resposta em texto livre (Júlia).
+     * Mesmas regras de nova tentativa do {@link #gerar}.
+     */
+    <T> T conversar(String modelo, double temperatura, String raciocinio, int maxTokensSaida,
+                    GeminiConversa conversa, Function<GeminiResposta, T> interpretar) {
+        exigirModelo(modelo);
+        Objects.requireNonNull(conversa, "conversa é obrigatória");
+        return enviar(modelo, montarCorpoConversa(conversa, temperatura, raciocinio, maxTokensSaida), interpretar);
+    }
+
+    String montarCorpo(List<GeminiParte> partes, double temperatura) {
+        return montarCorpo(partes, temperatura, null);
+    }
+
+    String montarCorpo(List<GeminiParte> partes, double temperatura, String raciocinio) {
+        ObjectNode corpo = json.createObjectNode();
+        ArrayNode nos = corpo.putArray("contents")
+                .addObject()
+                .put("role", "user")
+                .putArray("parts");
+        for (GeminiParte parte : partes) {
+            if (parte instanceof GeminiParte.Texto texto) {
+                nos.addObject().put("text", texto.texto());
+            } else if (parte instanceof GeminiParte.Imagem imagem) {
+                nos.addObject()
+                        .putObject("inlineData")
+                        .put("mimeType", imagem.mimeType())
+                        .put("data", imagem.dadosBase64());
+            }
+        }
+        ObjectNode configuracao = corpo.putObject("generationConfig")
+                .put("temperature", temperatura)
+                .put("responseMimeType", "application/json");
+        adicionarRaciocinio(configuracao, raciocinio);
+        return json.writeValueAsString(corpo);
+    }
+
+    String montarCorpoConversa(GeminiConversa conversa, double temperatura, String raciocinio, int maxTokensSaida) {
+        if (maxTokensSaida <= 0) {
+            throw new IllegalArgumentException("maxTokensSaida deve ser positivo");
+        }
+        ObjectNode corpo = json.createObjectNode();
+        // Instrução de sistema + contexto ficam no começo e não mudam entre as perguntas da mesma conversa:
+        // prefixo estável favorece o cache implícito do Gemini.
+        corpo.putObject("systemInstruction")
+                .putArray("parts")
+                .addObject()
+                .put("text", conversa.instrucaoSistema());
+        ArrayNode conteudos = corpo.putArray("contents");
+        for (GeminiTurno turno : conversa.turnos()) {
+            conteudos.addObject()
+                    .put("role", turno.papel().valorApi())
+                    .putArray("parts")
+                    .addObject()
+                    .put("text", turno.texto());
+        }
+        ObjectNode configuracao = corpo.putObject("generationConfig")
+                .put("temperature", temperatura)
+                .put("maxOutputTokens", maxTokensSaida)
+                .put("responseMimeType", "text/plain");
+        adicionarRaciocinio(configuracao, raciocinio);
+        return json.writeValueAsString(corpo);
+    }
+
+    private <T> T enviar(String modelo, String corpo, Function<GeminiResposta, T> interpretar) {
         GeminiException ultimaFalha = null;
 
         for (int tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
@@ -114,36 +179,20 @@ class GeminiClient {
         throw ultimaFalha;
     }
 
-    String montarCorpo(List<GeminiParte> partes, double temperatura) {
-        return montarCorpo(partes, temperatura, null);
+    private static void adicionarRaciocinio(ObjectNode configuracao, String raciocinio) {
+        if (raciocinio == null || raciocinio.isBlank()) {
+            return;
+        }
+        String nivel = raciocinio.strip().toLowerCase(Locale.ROOT);
+        if (!NIVEIS_RACIOCINIO.contains(nivel)) {
+            throw new IllegalArgumentException("nível de raciocínio inválido: " + raciocinio);
+        }
+        configuracao.putObject("thinkingConfig").put("thinkingLevel", nivel);
     }
 
-    String montarCorpo(List<GeminiParte> partes, double temperatura, String raciocinio) {
-        ObjectNode corpo = json.createObjectNode();
-        ArrayNode nos = corpo.putArray("contents")
-                .addObject()
-                .put("role", "user")
-                .putArray("parts");
-        for (GeminiParte parte : partes) {
-            if (parte instanceof GeminiParte.Texto texto) {
-                nos.addObject().put("text", texto.texto());
-            } else if (parte instanceof GeminiParte.Imagem imagem) {
-                nos.addObject()
-                        .putObject("inlineData")
-                        .put("mimeType", imagem.mimeType())
-                        .put("data", imagem.dadosBase64());
-            }
+    private static void exigirModelo(String modelo) {
+        if (modelo == null || modelo.isBlank()) {
+            throw new IllegalArgumentException("modelo é obrigatório");
         }
-        ObjectNode configuracao = corpo.putObject("generationConfig")
-                .put("temperature", temperatura)
-                .put("responseMimeType", "application/json");
-        if (raciocinio != null && !raciocinio.isBlank()) {
-            String nivel = raciocinio.strip().toLowerCase(java.util.Locale.ROOT);
-            if (!NIVEIS_RACIOCINIO.contains(nivel)) {
-                throw new IllegalArgumentException("nível de raciocínio inválido: " + raciocinio);
-            }
-            configuracao.putObject("thinkingConfig").put("thinkingLevel", nivel);
-        }
-        return json.writeValueAsString(corpo);
     }
 }
