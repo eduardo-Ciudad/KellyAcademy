@@ -2,7 +2,8 @@ package eduar.studymindredacao.domain.model.enums;
 
 public enum RecursoIA {
     CORRECAO("correções"),
-    TRANSCRICAO("transcrições");
+    TRANSCRICAO("transcrições"),
+    JULIA("perguntas à Júlia");
 
     private final String rotuloPlural;
 

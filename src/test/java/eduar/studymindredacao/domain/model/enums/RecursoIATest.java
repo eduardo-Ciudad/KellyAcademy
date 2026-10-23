@@ -10,6 +10,7 @@ class RecursoIATest {
     void cadaRecursoTemOProprioRotuloParaAsMensagensDeLimite() {
         assertThat(RecursoIA.CORRECAO.rotuloPlural()).isEqualTo("correções");
         assertThat(RecursoIA.TRANSCRICAO.rotuloPlural()).isEqualTo("transcrições");
+        assertThat(RecursoIA.JULIA.rotuloPlural()).isEqualTo("perguntas à Júlia");
     }
 
     @Test
