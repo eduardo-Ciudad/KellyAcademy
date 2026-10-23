@@ -65,12 +65,6 @@ public class UsoIADiarioRepositoryAdapter implements UsoIADiarioRepositoryPort {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public int somarCorrecoesDoDia(LocalDate data) {
-        return repository.somarCorrecoesDoDia(data);
-    }
-
-    @Override
     @Transactional
     public boolean reservarTranscricao(UUID usuarioId, LocalDate data, int limite) {
         if (limite <= 0) {
@@ -83,12 +77,6 @@ public class UsoIADiarioRepositoryAdapter implements UsoIADiarioRepositoryPort {
     @Transactional
     public void liberarTranscricao(UUID usuarioId, LocalDate data) {
         repository.liberarTranscricao(usuarioId, data);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public int somarTranscricoesDoDia(LocalDate data) {
-        return repository.somarTranscricoesDoDia(data);
     }
 
     @Override
@@ -110,12 +98,6 @@ public class UsoIADiarioRepositoryAdapter implements UsoIADiarioRepositoryPort {
     @Transactional
     public void liberarMensagemJulia(UUID usuarioId, LocalDate data) {
         repository.liberarMensagemJulia(usuarioId, data);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public int somarMensagensJuliaDoDia(LocalDate data) {
-        return repository.somarMensagensJuliaDoDia(data);
     }
 
     @Override

@@ -16,6 +16,18 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
+/**
+ * Marca como ERRO as redações presas em EM_AVALIACAO há mais de {@link #TEMPO_MAXIMO_EM_AVALIACAO}
+ * (a API caiu ou travou no meio da correção) e devolve a vaga do aluno no dia do envio.
+ *
+ * <p>Devolve só a vaga do aluno, NUNCA a do teto global (KELLY-SEC-002). Uma redação presa provavelmente
+ * chegou a chamar o Gemini, e a chamada pode ter sido cobrada; o teto global é de custo, e devolvê-lo seria
+ * fingir que um custo possivelmente real não aconteceu. Se errar, erra contando a mais. Por isso este job
+ * nem recebe o UsoIAGlobalRepositoryPort: não injete o ReservadorCotaIA aqui.
+ *
+ * <p>O tempo máximo precisa ficar bem acima do pior caso de uma correção (timeout do Gemini × tentativas),
+ * senão o job marcaria ERRO numa correção ainda em andamento e devolveria a vaga dela.
+ */
 @Service
 public class RecuperarRedacoesPresasService {
     private static final Logger log = LoggerFactory.getLogger(RecuperarRedacoesPresasService.class);

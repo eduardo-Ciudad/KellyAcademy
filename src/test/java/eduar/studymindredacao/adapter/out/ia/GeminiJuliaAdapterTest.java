@@ -5,6 +5,7 @@ import eduar.studymindredacao.domain.julia.ContextoJulia;
 import eduar.studymindredacao.domain.julia.JuliaIndisponivelException;
 import eduar.studymindredacao.domain.julia.MensagemJulia;
 import eduar.studymindredacao.domain.julia.RespostaJulia;
+import eduar.studymindredacao.domain.model.enums.CustoFalhaIA;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -105,6 +106,26 @@ class GeminiJuliaAdapterTest {
         assertThatThrownBy(() -> adapter.responder(contexto(), List.of(), "Por que perdi pontos?"))
                 .isInstanceOf(JuliaIndisponivelException.class);
         assertThat(gemini.recebidas()).hasSize(GeminiClient.MAX_TENTATIVAS);
+    }
+
+    @Test
+    void geminiForaDoArChegaComoNaoCobrada() {
+        gemini.responder(500, "{}");
+        gemini.responder(500, "{}");
+
+        assertThatThrownBy(() -> adapter.responder(contexto(), List.of(), "Por que perdi pontos?"))
+                .isInstanceOfSatisfying(JuliaIndisponivelException.class,
+                        e -> assertThat(e.custo()).isEqualTo(CustoFalhaIA.NAO_COBRADA));
+    }
+
+    @Test
+    void respostaSemCandidatosChegaComoCobrada() {
+        gemini.responder(200, "{\"candidates\":[]}");
+        gemini.responder(200, "{\"candidates\":[]}");
+
+        assertThatThrownBy(() -> adapter.responder(contexto(), List.of(), "Por que perdi pontos?"))
+                .isInstanceOfSatisfying(JuliaIndisponivelException.class,
+                        e -> assertThat(e.custo()).isEqualTo(CustoFalhaIA.COBRADA));
     }
 
     private static ContextoJulia contexto() {

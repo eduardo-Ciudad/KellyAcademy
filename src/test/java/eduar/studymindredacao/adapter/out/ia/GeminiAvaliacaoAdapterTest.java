@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import eduar.studymindredacao.domain.exception.AvaliacaoIAException;
 import eduar.studymindredacao.domain.model.SolicitacaoAvaliacao;
+import eduar.studymindredacao.domain.model.enums.CustoFalhaIA;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -122,5 +123,25 @@ class GeminiAvaliacaoAdapterTest {
                 .isInstanceOf(AvaliacaoIAException.class)
                 .hasMessageContaining("HTTP 429");
         assertThat(recebidas).hasSize(1);
+    }
+
+    @Test
+    void geminiForaDoArChegaComoNaoCobrada() {
+        respostas.add(new RespostaFalsa(503, "{}"));
+        respostas.add(new RespostaFalsa(503, "{}"));
+
+        assertThatThrownBy(() -> adapter.avaliar(solicitacao))
+                .isInstanceOfSatisfying(AvaliacaoIAException.class,
+                        e -> assertThat(e.custo()).isEqualTo(CustoFalhaIA.NAO_COBRADA));
+    }
+
+    @Test
+    void respostaInvalidaChegaComoCobrada() {
+        respostas.add(new RespostaFalsa(200, envelope("lixo")));
+        respostas.add(new RespostaFalsa(200, envelope("lixo de novo")));
+
+        assertThatThrownBy(() -> adapter.avaliar(solicitacao))
+                .isInstanceOfSatisfying(AvaliacaoIAException.class,
+                        e -> assertThat(e.custo()).isEqualTo(CustoFalhaIA.COBRADA));
     }
 }

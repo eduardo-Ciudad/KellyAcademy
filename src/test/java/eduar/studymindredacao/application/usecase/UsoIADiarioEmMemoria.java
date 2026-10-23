@@ -57,11 +57,6 @@ class UsoIADiarioEmMemoria implements UsoIADiarioRepositoryPort {
     }
 
     @Override
-    public int somarCorrecoesDoDia(LocalDate data) {
-        return usos.values().stream().filter(u -> data.equals(u.data())).mapToInt(UsoIADiario::qtdCorrecoes).sum();
-    }
-
-    @Override
     public boolean reservarTranscricao(UUID usuarioId, LocalDate data, int limite) {
         var atual = usoDoDia(usuarioId, data);
         if (limite <= 0 || atual.qtdTranscricoes() >= limite) {
@@ -77,11 +72,6 @@ class UsoIADiarioEmMemoria implements UsoIADiarioRepositoryPort {
         var atual = usoDoDia(usuarioId, data);
         salvar(new UsoIADiario(atual.id(), usuarioId, data, atual.tokensEntrada(), atual.tokensSaida(),
                 atual.qtdCorrecoes(), atual.qtdRoadmaps(), Math.max(atual.qtdTranscricoes() - 1, 0)));
-    }
-
-    @Override
-    public int somarTranscricoesDoDia(LocalDate data) {
-        return usos.values().stream().filter(u -> data.equals(u.data())).mapToInt(UsoIADiario::qtdTranscricoes).sum();
     }
 
     @Override
@@ -105,14 +95,6 @@ class UsoIADiarioEmMemoria implements UsoIADiarioRepositoryPort {
     @Override
     public void liberarMensagemJulia(UUID usuarioId, LocalDate data) {
         mensagensJulia.computeIfPresent(new Chave(usuarioId, data), (chave, qtd) -> Math.max(qtd - 1, 0));
-    }
-
-    @Override
-    public int somarMensagensJuliaDoDia(LocalDate data) {
-        return mensagensJulia.entrySet().stream()
-                .filter(e -> data.equals(e.getKey().data()))
-                .mapToInt(Map.Entry::getValue)
-                .sum();
     }
 
     @Override

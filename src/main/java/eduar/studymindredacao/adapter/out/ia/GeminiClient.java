@@ -1,6 +1,7 @@
 package eduar.studymindredacao.adapter.out.ia;
 
 import eduar.studymindredacao.application.usecase.LogSeguro;
+import eduar.studymindredacao.domain.model.enums.CustoFalhaIA;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -13,7 +14,9 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.net.ConnectException;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -146,8 +149,14 @@ class GeminiClient {
         return json.writeValueAsString(corpo);
     }
 
+    /**
+     * Envia com novas tentativas e, se tudo falhar, anexa à exceção o custo olhando TODAS as tentativas (6.5):
+     * se uma recebeu HTTP 200 e a seguinte deu 5xx, a última sozinha diria "não cobrada" e a vaga voltaria.
+     */
     private <T> T enviar(String modelo, String corpo, Function<GeminiResposta, T> interpretar) {
         GeminiException ultimaFalha = null;
+        boolean respondeu = false;
+        boolean incerto = false;
 
         for (int tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
             try {
@@ -159,24 +168,49 @@ class GeminiClient {
                         .body(corpo)
                         .retrieve()
                         .body(String.class);
+                // HTTP 200: o Gemini processou e cobrou, antes de qualquer interpretação (que pode lançar)
+                respondeu = true;
                 return interpretar.apply(envelopeParser.ler(respostaHttp, modelo));
             } catch (HttpClientErrorException e) {
                 // 4xx (chave inválida, cota estourada, requisição malformada): repetir não resolve
                 throw GeminiException.definitiva(
                         "Gemini recusou a requisição (HTTP " + e.getStatusCode().value() + ")", e
-                );
-            } catch (HttpServerErrorException | ResourceAccessException e) {
+                ).comCusto(custo(respondeu, incerto));
+            } catch (HttpServerErrorException e) {
+                ultimaFalha = GeminiException.repetivel("Gemini indisponível: " + e.getMessage(), e);
+            } catch (ResourceAccessException e) {
+                if (!falhaAntesDeConectar(e)) {
+                    // Timeout de leitura ou conexão cortada no meio: o Gemini pode ter gerado (e cobrado)
+                    incerto = true;
+                }
                 ultimaFalha = GeminiException.repetivel("Gemini indisponível: " + e.getMessage(), e);
             } catch (GeminiException e) {
                 if (!e.podeRepetir()) {
-                    throw e;
+                    throw e.comCusto(custo(respondeu, incerto));
                 }
                 ultimaFalha = e;
             }
             log.warn("Falha na chamada ao Gemini {} (tentativa {}/{}): {}",
                     modelo, tentativa, MAX_TENTATIVAS, LogSeguro.limpar(ultimaFalha.getMessage()));
         }
-        throw ultimaFalha;
+        throw ultimaFalha.comCusto(custo(respondeu, incerto));
+    }
+
+    static CustoFalhaIA custo(boolean respondeu, boolean incerto) {
+        if (respondeu) {
+            return CustoFalhaIA.COBRADA;
+        }
+        return incerto ? CustoFalhaIA.INCERTA : CustoFalhaIA.NAO_COBRADA;
+    }
+
+    /** Só conexão recusada ou timeout de conexão garantem que a requisição não chegou ao Gemini. */
+    private static boolean falhaAntesDeConectar(ResourceAccessException e) {
+        for (Throwable causa = e.getCause(); causa != null; causa = causa.getCause()) {
+            if (causa instanceof ConnectException || causa instanceof HttpConnectTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void adicionarRaciocinio(ObjectNode configuracao, String raciocinio) {

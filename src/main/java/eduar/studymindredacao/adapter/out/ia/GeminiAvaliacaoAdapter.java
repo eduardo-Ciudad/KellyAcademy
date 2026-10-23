@@ -49,7 +49,7 @@ public class GeminiAvaliacaoAdapter implements AvaliacaoIAPort {
         try {
             return client.gerar(modelo, temperatura, raciocinio, partes, parser::interpretar);
         } catch (GeminiException e) {
-            throw new AvaliacaoIAException(e.getMessage(), e);
+            throw new AvaliacaoIAException(e.getMessage(), e, e.custo());
         }
     }
 }

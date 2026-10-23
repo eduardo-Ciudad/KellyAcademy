@@ -89,15 +89,17 @@ class UsoIADiarioJuliaIntegrationTest {
         assertThat(usos.contarMensagensJulia(usuarioId, DIA)).isZero();
     }
 
+    /** O total do dia de todos os alunos é o contador global (V24), coberto no UsoIAGlobalIntegrationTest. */
     @Test
-    void somaDoDiaJuntaTodosOsUsuariosESoAqueleDia() {
+    void contagemDoAlunoSeparaPorDiaEPorUsuario() {
         var outro = novoUsuario();
         usos.reservarMensagemJulia(usuarioId, DIA, LIMITE);
         usos.reservarMensagemJulia(usuarioId, DIA, LIMITE);
         usos.reservarMensagemJulia(outro, DIA, LIMITE);
         usos.reservarMensagemJulia(outro, DIA.plusDays(1), LIMITE);
 
-        assertThat(usos.somarMensagensJuliaDoDia(DIA)).isEqualTo(3);
+        assertThat(usos.contarMensagensJulia(usuarioId, DIA)).isEqualTo(2);
+        assertThat(usos.contarMensagensJulia(outro, DIA)).isEqualTo(1);
         assertThat(usos.contarMensagensJulia(outro, DIA.plusDays(1))).isEqualTo(1);
     }
 

@@ -58,7 +58,7 @@ public class GeminiJuliaAdapter implements JuliaIAPort {
                     resposta -> new RespostaJulia(
                             resposta.textoGerado(), resposta.tokensEntrada(), resposta.tokensSaida()));
         } catch (GeminiException e) {
-            throw new JuliaIndisponivelException(MENSAGEM_INDISPONIVEL, e);
+            throw new JuliaIndisponivelException(MENSAGEM_INDISPONIVEL, e, e.custo());
         }
     }
 }

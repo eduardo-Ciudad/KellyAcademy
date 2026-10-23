@@ -48,7 +48,7 @@ public class GeminiTranscricaoAdapter implements TranscricaoIAPort {
         try {
             return client.gerar(modelo, temperatura, partes, parser::interpretar);
         } catch (GeminiException e) {
-            throw new TranscricaoIAException(e.getMessage(), e);
+            throw new TranscricaoIAException(e.getMessage(), e, e.custo());
         }
     }
 }

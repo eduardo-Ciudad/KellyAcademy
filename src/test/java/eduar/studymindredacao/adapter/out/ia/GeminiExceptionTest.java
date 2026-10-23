@@ -1,5 +1,6 @@
 package eduar.studymindredacao.adapter.out.ia;
 
+import eduar.studymindredacao.domain.model.enums.CustoFalhaIA;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -34,5 +35,25 @@ class GeminiExceptionTest {
 
         assertThat(excecao.podeRepetir()).isFalse();
         assertThat(excecao).hasMessageContaining("HTTP 429").hasCause(causa);
+    }
+
+    @Test
+    void semCustoInformadoValeIncerta() {
+        assertThat(GeminiException.repetivel("x").custo()).isEqualTo(CustoFalhaIA.INCERTA);
+        assertThat(GeminiException.definitiva("x", null).custo()).isEqualTo(CustoFalhaIA.INCERTA);
+    }
+
+    @Test
+    void comCustoMantemMensagemCausaERegraDeRepeticao() {
+        var causa = new IOException("timeout");
+        var original = GeminiException.repetivel("Gemini indisponível", causa);
+
+        var comCusto = original.comCusto(CustoFalhaIA.COBRADA);
+
+        assertThat(comCusto.custo()).isEqualTo(CustoFalhaIA.COBRADA);
+        assertThat(comCusto).hasMessage("Gemini indisponível").hasCause(causa);
+        assertThat(comCusto.podeRepetir()).isTrue();
+        assertThat(comCusto.getStackTrace()).isEqualTo(original.getStackTrace());
+        assertThat(original.custo()).isEqualTo(CustoFalhaIA.INCERTA);
     }
 }

@@ -6,6 +6,11 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Uso de IA de UM aluno por dia. O teto do sistema fica no {@link UsoIAGlobalRepositoryPort}.
+ * Não há "soma do dia" aqui de propósito (KELLY-SEC-002): somar e depois reservar, em duas operações,
+ * deixava requisições simultâneas passarem do teto. Reservas passam pelo ReservadorCotaIA.
+ */
 public interface UsoIADiarioRepositoryPort {
     UsoIADiario salvar(UsoIADiario usoIADiario);
 
@@ -19,24 +24,15 @@ public interface UsoIADiarioRepositoryPort {
 
     void liberarCorrecao(UUID usuarioId, LocalDate data);
 
-    /** Soma das correções reservadas no dia, de todos os usuários (teto global de custo). */
-    int somarCorrecoesDoDia(LocalDate data);
-
     boolean reservarTranscricao(UUID usuarioId, LocalDate data, int limite);
 
     void liberarTranscricao(UUID usuarioId, LocalDate data);
-
-    /** Soma das transcrições reservadas no dia, de todos os usuários (teto global de custo). */
-    int somarTranscricoesDoDia(LocalDate data);
 
     void registrarTokens(UUID usuarioId, LocalDate data, int tokensEntrada, int tokensSaida);
 
     boolean reservarMensagemJulia(UUID usuarioId, LocalDate data, int limite);
 
     void liberarMensagemJulia(UUID usuarioId, LocalDate data);
-
-    /** Soma das perguntas à Júlia no dia, de todos os usuários (teto global de custo da Júlia). */
-    int somarMensagensJuliaDoDia(LocalDate data);
 
     /** Perguntas à Júlia feitas pelo aluno no dia (0 se ainda não há linha), para mostrar quantas restam. */
     int contarMensagensJulia(UUID usuarioId, LocalDate data);

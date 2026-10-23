@@ -32,9 +32,6 @@ interface UsoIADiarioJpaRepository extends JpaRepository<UsoIADiarioEntity, UUID
             """, nativeQuery = true)
     int liberarCorrecao(@Param("usuarioId") UUID usuarioId, @Param("data") LocalDate data);
 
-    @Query(value = "SELECT COALESCE(SUM(qtd_correcoes), 0) FROM uso_ia_diario WHERE data = :data", nativeQuery = true)
-    int somarCorrecoesDoDia(@Param("data") LocalDate data);
-
     @Modifying
     @Query(value = """
             UPDATE uso_ia_diario
@@ -67,9 +64,6 @@ interface UsoIADiarioJpaRepository extends JpaRepository<UsoIADiarioEntity, UUID
             """, nativeQuery = true)
     int liberarTranscricao(@Param("usuarioId") UUID usuarioId, @Param("data") LocalDate data);
 
-    @Query(value = "SELECT COALESCE(SUM(qtd_transcricoes), 0) FROM uso_ia_diario WHERE data = :data", nativeQuery = true)
-    int somarTranscricoesDoDia(@Param("data") LocalDate data);
-
     @Modifying
     @Query(value = """
             INSERT INTO uso_ia_diario (usuario_id, data, qtd_mensagens_julia)
@@ -87,9 +81,6 @@ interface UsoIADiarioJpaRepository extends JpaRepository<UsoIADiarioEntity, UUID
              WHERE usuario_id = :usuarioId AND data = :data
             """, nativeQuery = true)
     int liberarMensagemJulia(@Param("usuarioId") UUID usuarioId, @Param("data") LocalDate data);
-
-    @Query(value = "SELECT COALESCE(SUM(qtd_mensagens_julia), 0) FROM uso_ia_diario WHERE data = :data", nativeQuery = true)
-    int somarMensagensJuliaDoDia(@Param("data") LocalDate data);
 
     @Query(value = """
             SELECT COALESCE(MAX(qtd_mensagens_julia), 0)

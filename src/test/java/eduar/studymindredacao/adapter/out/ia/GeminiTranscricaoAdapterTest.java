@@ -4,6 +4,7 @@ import eduar.studymindredacao.domain.exception.ImagemNaoReconhecidaException;
 import eduar.studymindredacao.domain.exception.TranscricaoIAException;
 import eduar.studymindredacao.domain.model.ImagemRedacao;
 import eduar.studymindredacao.domain.model.ImagensDeTeste;
+import eduar.studymindredacao.domain.model.enums.CustoFalhaIA;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -111,6 +112,35 @@ class GeminiTranscricaoAdapterTest {
                 .isInstanceOf(TranscricaoIAException.class)
                 .hasMessageContaining("HTTP 400");
         assertThat(gemini.recebidas()).hasSize(1);
+    }
+
+    @Test
+    void geminiForaDoArChegaComoNaoCobrada() {
+        gemini.responder(503, "{}");
+        gemini.responder(503, "{}");
+
+        assertThatThrownBy(() -> adapter.transcrever(List.of(foto)))
+                .isInstanceOfSatisfying(TranscricaoIAException.class,
+                        e -> assertThat(e.custo()).isEqualTo(CustoFalhaIA.NAO_COBRADA));
+    }
+
+    @Test
+    void respostaInvalidaChegaComoCobrada() {
+        gemini.responder(200, envelope("lixo"));
+        gemini.responder(200, envelope("lixo de novo"));
+
+        assertThatThrownBy(() -> adapter.transcrever(List.of(foto)))
+                .isInstanceOfSatisfying(TranscricaoIAException.class,
+                        e -> assertThat(e.custo()).isEqualTo(CustoFalhaIA.COBRADA));
+    }
+
+    @Test
+    void fotoQueNaoERedacaoChegaComoCobrada() {
+        gemini.responder(200, envelope("{\"eh_redacao\": false, \"motivo\": \"foto de um gato\", \"linhas\": []}"));
+
+        assertThatThrownBy(() -> adapter.transcrever(List.of(foto)))
+                .isInstanceOfSatisfying(ImagemNaoReconhecidaException.class,
+                        e -> assertThat(e.custo()).isEqualTo(CustoFalhaIA.COBRADA));
     }
 
     @Test

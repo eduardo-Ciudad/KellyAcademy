@@ -2,6 +2,8 @@ package eduar.studymindredacao.adapter.out.ia;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import eduar.studymindredacao.domain.exception.ImagemNaoReconhecidaException;
+import eduar.studymindredacao.domain.model.enums.CustoFalhaIA;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,6 +12,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -24,7 +27,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Sobe um servidor HTTP local que imita o Gemini, sem chamar a API real. */
 class GeminiClientTest {
-    private record RespostaFalsa(int status, String corpo) {
+    private record RespostaFalsa(int status, String corpo, long atrasoMs) {
+        RespostaFalsa(int status, String corpo) {
+            this(status, corpo, 0);
+        }
     }
 
     private record RequisicaoRecebida(String caminho, String apiKey, String corpo) {
@@ -59,6 +65,14 @@ class GeminiClientTest {
                 troca.getRequestURI().getPath(), troca.getRequestHeaders().getFirst("x-goog-api-key"), corpo
         ));
         RespostaFalsa resposta = respostas.isEmpty() ? new RespostaFalsa(500, "{}") : respostas.poll();
+        if (resposta.atrasoMs() > 0) {
+            try {
+                Thread.sleep(resposta.atrasoMs());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
         byte[] bytes = resposta.corpo().getBytes(StandardCharsets.UTF_8);
         troca.getResponseHeaders().add("Content-Type", "application/json");
         troca.sendResponseHeaders(resposta.status(), bytes.length);
@@ -162,6 +176,100 @@ class GeminiClientTest {
         assertThatThrownBy(() -> client.gerar("gemini-teste", 0.3, SO_TEXTO, resposta -> {
             throw new IllegalStateException("não é redação");
         })).isInstanceOf(IllegalStateException.class);
+        assertThat(recebidas).hasSize(1);
+    }
+
+    // ---------- custo da falha (6.5): decide se a vaga volta ----------
+
+    private static final String SEM_CANDIDATOS = "{\"candidates\":[]}";
+
+    private static void custoDaFalha(Runnable chamada, CustoFalhaIA esperado) {
+        assertThatThrownBy(chamada::run)
+                .isInstanceOfSatisfying(GeminiException.class, e -> assertThat(e.custo()).isEqualTo(esperado));
+    }
+
+    @Test
+    void erro5xxNasDuasTentativasNaoECobrado() {
+        respostas.add(new RespostaFalsa(503, "{}"));
+        respostas.add(new RespostaFalsa(500, "{}"));
+
+        custoDaFalha(() -> client.gerar("gemini-teste", 0.3, SO_TEXTO, TEXTO_GERADO), CustoFalhaIA.NAO_COBRADA);
+        assertThat(recebidas).hasSize(2);
+    }
+
+    @Test
+    void erro4xxNaoECobradoENaoRepete() {
+        respostas.add(new RespostaFalsa(429, "{}"));
+
+        custoDaFalha(() -> client.gerar("gemini-teste", 0.3, SO_TEXTO, TEXTO_GERADO), CustoFalhaIA.NAO_COBRADA);
+        assertThat(recebidas).hasSize(1);
+    }
+
+    @Test
+    void respostaInvalidaNasDuasTentativasECobrada() {
+        respostas.add(new RespostaFalsa(200, SEM_CANDIDATOS));
+        respostas.add(new RespostaFalsa(200, SEM_CANDIDATOS));
+
+        custoDaFalha(() -> client.gerar("gemini-teste", 0.3, SO_TEXTO, TEXTO_GERADO), CustoFalhaIA.COBRADA);
+    }
+
+    @Test
+    void respostaInvalidaSeguidaDe5xxContinuaCobrada() {
+        // Só a última tentativa diria "não cobrada": a primeira, cobrada, não pode ser esquecida
+        respostas.add(new RespostaFalsa(200, SEM_CANDIDATOS));
+        respostas.add(new RespostaFalsa(503, "{}"));
+
+        custoDaFalha(() -> client.gerar("gemini-teste", 0.3, SO_TEXTO, TEXTO_GERADO), CustoFalhaIA.COBRADA);
+        assertThat(recebidas).hasSize(2);
+    }
+
+    @Test
+    void erro5xxSeguidoDeRespostaInvalidaECobrada() {
+        respostas.add(new RespostaFalsa(503, "{}"));
+        respostas.add(new RespostaFalsa(200, SEM_CANDIDATOS));
+
+        custoDaFalha(() -> client.gerar("gemini-teste", 0.3, SO_TEXTO, TEXTO_GERADO), CustoFalhaIA.COBRADA);
+    }
+
+    @Test
+    void falhaDefinitivaDaInterpretacaoECobrada() {
+        respostas.add(new RespostaFalsa(200, envelope("{\"ok\":true}")));
+
+        custoDaFalha(() -> client.gerar("gemini-teste", 0.3, SO_TEXTO, resposta -> {
+            throw GeminiException.definitiva("conteúdo proibido", null);
+        }), CustoFalhaIA.COBRADA);
+    }
+
+    @Test
+    void timeoutDeLeituraEIncerto() {
+        var comTimeoutCurto = new GeminiClient(
+                "http://127.0.0.1:" + servidor.getAddress().getPort() + "/v1beta", "chave-de-teste", 1);
+        respostas.add(new RespostaFalsa(200, envelope("{\"ok\":true}"), 1500));
+        respostas.add(new RespostaFalsa(200, envelope("{\"ok\":true}"), 1500));
+
+        custoDaFalha(() -> comTimeoutCurto.gerar("gemini-teste", 0.3, SO_TEXTO, TEXTO_GERADO), CustoFalhaIA.INCERTA);
+    }
+
+    @Test
+    void servidorForaDoArNaoECobrado() throws IOException {
+        int portaFechada;
+        try (var socket = new ServerSocket(0)) {
+            portaFechada = socket.getLocalPort();
+        }
+        var semServidor = new GeminiClient("http://127.0.0.1:" + portaFechada + "/v1beta", "chave-de-teste", 5);
+
+        custoDaFalha(() -> semServidor.gerar("gemini-teste", 0.3, SO_TEXTO, TEXTO_GERADO), CustoFalhaIA.NAO_COBRADA);
+    }
+
+    @Test
+    void excecaoDeDominioDaInterpretacaoSobeIntactaECobrada() {
+        respostas.add(new RespostaFalsa(200, envelope("{\"eh_redacao\":false}")));
+        var naoEhRedacao = new ImagemNaoReconhecidaException();
+
+        assertThatThrownBy(() -> client.gerar("gemini-teste", 0.3, SO_TEXTO, resposta -> {
+            throw naoEhRedacao;
+        })).isSameAs(naoEhRedacao);
+        assertThat(naoEhRedacao.custo()).isEqualTo(CustoFalhaIA.COBRADA);
         assertThat(recebidas).hasSize(1);
     }
 
