@@ -2,8 +2,6 @@ package eduar.studymindredacao.application.usecase;
 
 import eduar.studymindredacao.domain.exception.ImagemInvalidaException;
 import eduar.studymindredacao.domain.exception.ImagemInvalidaException.Motivo;
-import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
-import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.model.ImagemRedacao;
 import eduar.studymindredacao.domain.model.ResultadoTranscricao;
 import eduar.studymindredacao.domain.model.enums.RecursoIA;
@@ -21,8 +19,10 @@ import java.util.UUID;
 
 /**
  * Transcreve a foto de uma redação manuscrita:
- * valida as imagens → teto global → reserva a vaga do dia → IA → registra os tokens.
- * Se a IA falhar, ou não encontrar redação na foto, a vaga é devolvida: o aluno não recebeu nada útil.
+ * valida a quantidade de fotos → permissão de concorrência → reserva a cota (teto global e vaga do aluno)
+ * → IA (projeto próprio no Google Cloud) → registra os tokens.
+ * Se a IA falhar, ou não encontrar redação na foto, as duas vagas são devolvidas: o aluno não recebeu nada útil.
+ * A permissão (1 transcrição por aluno, N no sistema) só é solta depois da contabilidade (KELLY-SEC-002).
  * Nada é persistido além do contador: a imagem e o texto ficam só em memória (#12).
  * Sem @Transactional de propósito, como no EnviarRedacaoService: a chamada à IA não segura conexão.
  */
@@ -33,6 +33,8 @@ public class TranscreverRedacaoService {
 
     private final UsoIADiarioRepositoryPort usoRepository;
     private final TranscricaoIAPort transcricaoIA;
+    private final ReservadorCotaIA reservador;
+    private final LimitadorConcorrenciaIA limitador;
     private final Clock clock;
     private final int limiteDiario;
     private final int limiteGlobal;
@@ -40,12 +42,16 @@ public class TranscreverRedacaoService {
     public TranscreverRedacaoService(
             UsoIADiarioRepositoryPort usoRepository,
             TranscricaoIAPort transcricaoIA,
+            ReservadorCotaIA reservador,
+            LimitadorConcorrenciaIA limitador,
             Clock clock,
             @Value("${app.limites.transcricoes-diarias-free}") int limiteDiario,
             @Value("${app.limites.transcricoes-diarias-globais}") int limiteGlobal
     ) {
         this.usoRepository = usoRepository;
         this.transcricaoIA = transcricaoIA;
+        this.reservador = reservador;
+        this.limitador = limitador;
         this.clock = clock;
         this.limiteDiario = limiteDiario;
         this.limiteGlobal = limiteGlobal;
@@ -54,26 +60,22 @@ public class TranscreverRedacaoService {
     public ResultadoTranscricao transcrever(UUID usuarioId, List<ImagemRedacao> imagens) {
         validarQuantidade(imagens);
 
-        LocalDate hoje = LocalDate.now(clock);
-        // Teto de custo do sistema, checado antes da reserva do aluno (aproximado sob concorrência, como na correção)
-        if (usoRepository.somarTranscricoesDoDia(hoje) >= limiteGlobal) {
-            throw new LimiteGlobalAtingidoException(RecursoIA.TRANSCRICAO);
-        }
-        if (!usoRepository.reservarTranscricao(usuarioId, hoje, limiteDiario)) {
-            throw new LimiteDiarioAtingidoException(RecursoIA.TRANSCRICAO, limiteDiario);
-        }
+        try (var permissao = limitador.adquirir(usuarioId, RecursoIA.TRANSCRICAO)) {
+            LocalDate hoje = LocalDate.now(clock);
+            ReservaCota reserva = reservador.reservar(usuarioId, RecursoIA.TRANSCRICAO, hoje, limiteDiario, limiteGlobal);
 
-        ResultadoTranscricao resultado;
-        try {
-            resultado = transcricaoIA.transcrever(imagens);
-        } catch (RuntimeException e) {
-            log.warn("Transcrição falhou ({}): {}", e.getClass().getSimpleName(), LogSeguro.limpar(e.getMessage()));
-            usoRepository.liberarTranscricao(usuarioId, hoje);
-            throw e;
-        }
+            ResultadoTranscricao resultado;
+            try {
+                resultado = transcricaoIA.transcrever(imagens);
+            } catch (RuntimeException e) {
+                log.warn("Transcrição falhou ({}): {}", e.getClass().getSimpleName(), LogSeguro.limpar(e.getMessage()));
+                reserva.liberar();
+                throw e;
+            }
 
-        registrarTokens(usuarioId, hoje, resultado);
-        return resultado;
+            registrarTokens(usuarioId, hoje, resultado);
+            return resultado;
+        }
     }
 
     /** Contabilidade de custo: se falhar, o aluno não perde a transcrição que já foi feita. */
