@@ -4,6 +4,7 @@ import eduar.studymindredacao.domain.exception.TranscricaoIAException;
 import eduar.studymindredacao.domain.model.ImagemRedacao;
 import eduar.studymindredacao.domain.model.ResultadoTranscricao;
 import eduar.studymindredacao.domain.port.TranscricaoIAPort;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
@@ -22,7 +23,7 @@ public class GeminiTranscricaoAdapter implements TranscricaoIAPort {
 
     public GeminiTranscricaoAdapter(
             PromptTranscricaoBuilder promptBuilder,
-            GeminiClient client,
+            @Qualifier("geminiClientTranscricao") GeminiClient client,
             @Value("${gemini.transcricao.modelo}") String modelo,
             @Value("${gemini.transcricao.temperatura}") double temperatura
     ) {

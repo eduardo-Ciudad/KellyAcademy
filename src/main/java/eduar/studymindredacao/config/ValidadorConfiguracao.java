@@ -5,12 +5,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Confere a configuração durante a subida (SEC-14). Com algo faltando ou inválido, a aplicação
  * não sobe e a mensagem lista tudo o que precisa corrigir, em vez de falhar calada em produção.
  * Valores numéricos chegam como String para que um valor vazio vire mensagem clara, não erro de conversão.
+ * As chaves do Gemini são conferidas à parte ({@link ChavesGemini}) e nunca vão para o log.
  */
 @Component
 class ValidadorConfiguracao {
@@ -28,7 +30,10 @@ class ValidadorConfiguracao {
             @Value("${spring.mail.port}") String mailPorta,
             @Value("${spring.mail.username}") String mailUsuario,
             @Value("${spring.mail.password}") String mailSenha,
-            @Value("${app.frontend-url}") String frontendUrl
+            @Value("${app.frontend-url}") String frontendUrl,
+            @Value("${gemini.api-key}") String chaveCorrecao,
+            @Value("${julia.gemini.api-key}") String chaveJulia,
+            @Value("${transcricao.gemini.api-key}") String chaveTranscricao
     ) {
         var config = new ConfiguracaoInicial(
                 inteiro(correcoesDiarias),
@@ -44,13 +49,16 @@ class ValidadorConfiguracao {
                 mailSenha,
                 frontendUrl
         );
-        List<String> erros = config.validar();
+        var chaves = new ChavesGemini(chaveCorrecao, chaveJulia, chaveTranscricao);
+
+        List<String> erros = new ArrayList<>(config.validar());
+        erros.addAll(chaves.validar());
         if (!erros.isEmpty()) {
             throw new IllegalStateException(
                     "Configuração inválida, a API não vai subir. Corrija no .env:\n- " + String.join("\n- ", erros)
             );
         }
-        log.info("Configuração em vigor: {}", config.resumoSeguro());
+        log.info("Configuração em vigor: {}, {}", config.resumoSeguro(), chaves);
     }
 
     /** Valor vazio ou não numérico vira 0, que a validação recusa com o nome da variável. */

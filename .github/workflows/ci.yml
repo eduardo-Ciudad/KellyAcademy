@@ -41,6 +41,7 @@ jobs:
       JWT_EXPIRACAO_MINUTOS: 60
       GEMINI_API_KEY: chave-falsa-ci
       JULIA_GEMINI_API_KEY: chave-falsa-ci-julia
+      TRANSCRICAO_GEMINI_API_KEY: chave-falsa-ci-transcricao
       CORS_ORIGENS: http://localhost:5173
       CADASTRO_ABERTO: "true"
       CADASTRO_EMAILS_PERMITIDOS: ""
