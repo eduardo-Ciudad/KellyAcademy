@@ -1,7 +1,5 @@
 package eduar.studymindredacao.application.usecase;
 
-import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
-import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.model.Redacao;
 import eduar.studymindredacao.domain.model.SolicitacaoAvaliacao;
@@ -12,7 +10,6 @@ import eduar.studymindredacao.domain.model.enums.TipoRedacao;
 import eduar.studymindredacao.domain.port.AvaliacaoIAPort;
 import eduar.studymindredacao.domain.port.RedacaoRepositoryPort;
 import eduar.studymindredacao.domain.port.TemaRepositoryPort;
-import eduar.studymindredacao.domain.port.UsoIADiarioRepositoryPort;
 import eduar.studymindredacao.domain.service.RegrasDaGrade;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,8 +22,10 @@ import java.util.UUID;
 
 /**
  * Fluxo síncrono de correção:
- * valida → reserva vaga do dia → salva redação EM_AVALIACAO → chama a IA → confere pela grade → conclui.
- * Se a IA (ou a conclusão) falhar, a redação vai para ERRO e a vaga é devolvida.
+ * valida texto e tema → permissão de concorrência → reserva a cota (teto global e vaga do aluno)
+ * → salva a redação EM_AVALIACAO → chama a IA → confere pela grade → conclui.
+ * Se a IA (ou a conclusão) falhar, a redação vai para ERRO e as duas vagas são devolvidas.
+ * A permissão (1 correção por aluno, N no sistema) só é solta depois de tudo gravado (KELLY-SEC-002).
  * Sem @Transactional de propósito: cada passo tem a sua transação curta.
  */
 @Service
@@ -36,9 +35,10 @@ public class EnviarRedacaoService {
 
     private final TemaRepositoryPort temaRepository;
     private final RedacaoRepositoryPort redacaoRepository;
-    private final UsoIADiarioRepositoryPort usoRepository;
     private final AvaliacaoIAPort avaliacaoIA;
     private final ConcluirAvaliacaoService concluirAvaliacao;
+    private final ReservadorCotaIA reservador;
+    private final LimitadorConcorrenciaIA limitador;
     private final Clock clock;
     private final int limiteDiario;
     private final int limiteGlobal;
@@ -46,18 +46,20 @@ public class EnviarRedacaoService {
     public EnviarRedacaoService(
             TemaRepositoryPort temaRepository,
             RedacaoRepositoryPort redacaoRepository,
-            UsoIADiarioRepositoryPort usoRepository,
             AvaliacaoIAPort avaliacaoIA,
             ConcluirAvaliacaoService concluirAvaliacao,
+            ReservadorCotaIA reservador,
+            LimitadorConcorrenciaIA limitador,
             Clock clock,
             @Value("${app.limites.correcoes-diarias-free}") int limiteDiario,
             @Value("${app.limites.correcoes-diarias-globais}") int limiteGlobal
     ) {
         this.temaRepository = temaRepository;
         this.redacaoRepository = redacaoRepository;
-        this.usoRepository = usoRepository;
         this.avaliacaoIA = avaliacaoIA;
         this.concluirAvaliacao = concluirAvaliacao;
+        this.reservador = reservador;
+        this.limitador = limitador;
         this.clock = clock;
         this.limiteDiario = limiteDiario;
         this.limiteGlobal = limiteGlobal;
@@ -69,36 +71,31 @@ public class EnviarRedacaoService {
                 .filter(t -> Boolean.TRUE.equals(t.ativo()))
                 .orElseThrow(() -> new TemaNaoEncontradoException(temaId));
 
-        LocalDate hoje = LocalDate.now(clock);
-        // Teto de custo do sistema: checado antes da reserva do aluno. Aproximado sob concorrência
-        // (dois envios simultâneos podem passar do teto em 1), o que basta para limitar o gasto.
-        if (usoRepository.somarCorrecoesDoDia(hoje) >= limiteGlobal) {
-            throw new LimiteGlobalAtingidoException(RecursoIA.CORRECAO);
-        }
-        if (!usoRepository.reservarCorrecao(usuarioId, hoje, limiteDiario)) {
-            throw new LimiteDiarioAtingidoException(RecursoIA.CORRECAO, limiteDiario);
-        }
+        try (var permissao = limitador.adquirir(usuarioId, RecursoIA.CORRECAO)) {
+            LocalDate hoje = LocalDate.now(clock);
+            ReservaCota reserva = reservador.reservar(usuarioId, RecursoIA.CORRECAO, hoje, limiteDiario, limiteGlobal);
 
-        Redacao redacao;
-        try {
-            redacao = redacaoRepository.salvar(
-                    new Redacao(null, usuarioId, temaId, tipo, texto, StatusRedacao.EM_AVALIACAO, null, origem)
-            );
-        } catch (RuntimeException e) {
-            usoRepository.liberarCorrecao(usuarioId, hoje);
-            throw e;
-        }
+            Redacao redacao;
+            try {
+                redacao = redacaoRepository.salvar(
+                        new Redacao(null, usuarioId, temaId, tipo, texto, StatusRedacao.EM_AVALIACAO, null, origem)
+                );
+            } catch (RuntimeException e) {
+                reserva.liberar();
+                throw e;
+            }
 
-        try {
-            var resultado = avaliacaoIA.avaliar(new SolicitacaoAvaliacao(tema.titulo(), texto));
-            var conferido = RegrasDaGrade.aplicar(resultado);
-            registrarConferencia(redacao.id(), conferido);
-            return concluirAvaliacao.concluir(redacao, tema, conferido.avaliacao(), hoje);
-        } catch (RuntimeException e) {
-            log.warn("Correção da redação {} falhou: {}", redacao.id(), LogSeguro.limpar(e.getMessage()));
-            marcarComoErro(redacao, e);
-            usoRepository.liberarCorrecao(usuarioId, hoje);
-            throw e;
+            try {
+                var resultado = avaliacaoIA.avaliar(new SolicitacaoAvaliacao(tema.titulo(), texto));
+                var conferido = RegrasDaGrade.aplicar(resultado);
+                registrarConferencia(redacao.id(), conferido);
+                return concluirAvaliacao.concluir(redacao, tema, conferido.avaliacao(), hoje);
+            } catch (RuntimeException e) {
+                log.warn("Correção da redação {} falhou: {}", redacao.id(), LogSeguro.limpar(e.getMessage()));
+                marcarComoErro(redacao, e);
+                reserva.liberar();
+                throw e;
+            }
         }
     }
 

@@ -1,19 +1,24 @@
 package eduar.studymindredacao.application.usecase;
 
 import eduar.studymindredacao.domain.exception.AvaliacaoIAException;
+import eduar.studymindredacao.domain.exception.IAOcupadaException;
+import eduar.studymindredacao.domain.exception.IAOcupadaException.Motivo;
 import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.model.CompetenciaAvaliada;
 import eduar.studymindredacao.domain.model.EvidenciaCompetencia;
+import eduar.studymindredacao.domain.model.Redacao;
 import eduar.studymindredacao.domain.model.ResultadoAvaliacaoIA;
 import eduar.studymindredacao.domain.model.SolicitacaoAvaliacao;
 import eduar.studymindredacao.domain.model.Tema;
 import eduar.studymindredacao.domain.model.enums.OrigemRedacao;
 import eduar.studymindredacao.domain.model.enums.OrigemTema;
+import eduar.studymindredacao.domain.model.enums.RecursoIA;
 import eduar.studymindredacao.domain.model.enums.StatusRedacao;
 import eduar.studymindredacao.domain.model.enums.TipoRedacao;
 import eduar.studymindredacao.domain.port.AvaliacaoIAPort;
+import eduar.studymindredacao.domain.port.RedacaoRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +29,12 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,6 +52,7 @@ class EnviarRedacaoServiceTest {
     private final RedacaoRepositoryEmMemoria redacoes = new RedacaoRepositoryEmMemoria();
     private final AvaliacaoRepositoryEmMemoria avaliacoes = new AvaliacaoRepositoryEmMemoria();
     private final UsoIADiarioEmMemoria uso = new UsoIADiarioEmMemoria();
+    private final UsoIAGlobalEmMemoria global = new UsoIAGlobalEmMemoria();
     private final List<SolicitacaoAvaliacao> chamadasIA = new ArrayList<>();
     private RuntimeException falhaDaIA;
     private ResultadoAvaliacaoIA respostaDaIA;
@@ -70,8 +82,14 @@ class EnviarRedacaoServiceTest {
     @BeforeEach
     void setUp() {
         tema = temas.salvar(new Tema(null, "Democratização do acesso ao cinema no Brasil", null, OrigemTema.ENEM_OFICIAL, (short) 2019, true, null));
-        var concluir = new ConcluirAvaliacaoService(avaliacoes, redacoes, uso);
-        service = new EnviarRedacaoService(temas, redacoes, uso, iaFake, concluir, RELOGIO, LIMITE, LIMITE_GLOBAL);
+        service = novoServico(redacoes, iaFake, LimitadoresDeTeste.padrao(), LIMITE_GLOBAL);
+    }
+
+    private EnviarRedacaoService novoServico(RedacaoRepositoryPort repositorio, AvaliacaoIAPort ia,
+                                             LimitadorConcorrenciaIA limitador, int tetoGlobal) {
+        var concluir = new ConcluirAvaliacaoService(avaliacoes, repositorio, uso);
+        return new EnviarRedacaoService(temas, repositorio, ia, concluir, new ReservadorCotaIA(global, uso),
+                limitador, RELOGIO, LIMITE, tetoGlobal);
     }
 
     @Test
@@ -90,6 +108,7 @@ class EnviarRedacaoServiceTest {
         assertThat(usoDoDia.qtdCorrecoes()).isEqualTo(1);
         assertThat(usoDoDia.tokensEntrada()).isEqualTo(2000);
         assertThat(usoDoDia.tokensSaida()).isEqualTo(600);
+        assertThat(global.quantidadeDoDia(RecursoIA.CORRECAO, HOJE_EM_SP)).isEqualTo(1);
     }
 
     @Test
@@ -160,6 +179,7 @@ class EnviarRedacaoServiceTest {
                 .satisfies(r -> assertThat(r.status()).isEqualTo(StatusRedacao.ERRO));
         assertThat(avaliacoes.todas()).isEmpty();
         assertThat(uso.usoDoDia(alunoId, HOJE_EM_SP).qtdCorrecoes()).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.CORRECAO, HOJE_EM_SP)).isZero();
     }
 
     @Test
@@ -208,8 +228,7 @@ class EnviarRedacaoServiceTest {
 
     @Test
     void tetoGlobalBloqueiaSemReservarVagaNemChamarAIA() {
-        var concluir = new ConcluirAvaliacaoService(avaliacoes, redacoes, uso);
-        var comTetoDeDois = new EnviarRedacaoService(temas, redacoes, uso, iaFake, concluir, RELOGIO, LIMITE, 2);
+        var comTetoDeDois = novoServico(redacoes, iaFake, LimitadoresDeTeste.padrao(), 2);
         UUID outroAluno = UUID.randomUUID();
         comTetoDeDois.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO);
         comTetoDeDois.enviar(outroAluno, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO);
@@ -220,5 +239,147 @@ class EnviarRedacaoServiceTest {
 
         assertThat(chamadasIA).hasSize(2);
         assertThat(uso.usoDoDia(terceiro, HOJE_EM_SP).qtdCorrecoes()).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.CORRECAO, HOJE_EM_SP)).isEqualTo(2);
+    }
+
+    // ---- Concorrência (KELLY-SEC-002) ----
+
+    @Test
+    void segundoEnvioDoMesmoAlunoEmAndamentoERecusadoSemGastarCota() throws Exception {
+        var ia = new IAPresa();
+        var comIAPresa = novoServico(redacoes, ia, LimitadoresDeTeste.padrao(), LIMITE_GLOBAL);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<RedacaoDetalhada> primeira = executor.submit(() ->
+                    comIAPresa.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO));
+            assertThat(ia.dentro.await(5, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> comIAPresa.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                    .isInstanceOfSatisfying(IAOcupadaException.class, e -> {
+                        assertThat(e.getMotivo()).isEqualTo(Motivo.ALUNO_EM_ANDAMENTO);
+                        assertThat(e.getRecurso()).isEqualTo(RecursoIA.CORRECAO);
+                    });
+            // Só a primeira gastou vaga, chamou a IA e criou redação
+            assertThat(uso.usoDoDia(alunoId, HOJE_EM_SP).qtdCorrecoes()).isEqualTo(1);
+            assertThat(global.quantidadeDoDia(RecursoIA.CORRECAO, HOJE_EM_SP)).isEqualTo(1);
+            assertThat(ia.chamadas).hasValue(1);
+            assertThat(redacoes.todas()).hasSize(1);
+
+            ia.soltar.countDown();
+            assertThat(primeira.get(10, TimeUnit.SECONDS).redacao().status()).isEqualTo(StatusRedacao.AVALIADA);
+        } finally {
+            ia.soltar.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void sistemaCheioRecusaSemGastarCotaNemSalvarRedacao() throws Exception {
+        var ia = new IAPresa();
+        var comUmaVaga = novoServico(redacoes, ia, LimitadoresDeTeste.com(RecursoIA.CORRECAO, 1), LIMITE_GLOBAL);
+        UUID outroAluno = UUID.randomUUID();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<RedacaoDetalhada> doOutro = executor.submit(() ->
+                    comUmaVaga.enviar(outroAluno, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO));
+            assertThat(ia.dentro.await(5, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> comUmaVaga.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                    .isInstanceOfSatisfying(IAOcupadaException.class,
+                            e -> assertThat(e.getMotivo()).isEqualTo(Motivo.SISTEMA_OCUPADO));
+            assertThat(uso.buscarPorUsuarioIdEData(alunoId, HOJE_EM_SP)).isEmpty();
+            assertThat(global.quantidadeDoDia(RecursoIA.CORRECAO, HOJE_EM_SP)).isEqualTo(1);
+            assertThat(redacoes.todas()).hasSize(1);
+
+            ia.soltar.countDown();
+            doOutro.get(10, TimeUnit.SECONDS);
+        } finally {
+            ia.soltar.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void falhaDaIALiberaATravaParaOAlunoEnviarDeNovo() {
+        falhaDaIA = new AvaliacaoIAException("Gemini indisponível");
+        assertThatThrownBy(() -> service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                .isInstanceOf(AvaliacaoIAException.class);
+        falhaDaIA = null;
+
+        var detalhada = service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO);
+
+        assertThat(detalhada.redacao().status()).isEqualTo(StatusRedacao.AVALIADA);
+        assertThat(global.quantidadeDoDia(RecursoIA.CORRECAO, HOJE_EM_SP)).isEqualTo(1);
+    }
+
+    @Test
+    void falhaAoSalvarARedacaoDevolveAsDuasVagasESoltaATrava() {
+        var falhaUmaVez = new RedacaoRepositoryEmMemoria() {
+            private boolean jaFalhou;
+
+            @Override
+            public Redacao salvar(Redacao redacao) {
+                if (!jaFalhou) {
+                    jaFalhou = true;
+                    throw new IllegalStateException("banco fora");
+                }
+                return super.salvar(redacao);
+            }
+        };
+        var comBancoInstavel = novoServico(falhaUmaVez, iaFake, LimitadoresDeTeste.padrao(), LIMITE_GLOBAL);
+
+        assertThatThrownBy(() -> comBancoInstavel.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                .hasMessage("banco fora");
+
+        assertThat(uso.usoDoDia(alunoId, HOJE_EM_SP).qtdCorrecoes()).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.CORRECAO, HOJE_EM_SP)).isZero();
+        assertThat(chamadasIA).isEmpty();
+
+        var detalhada = comBancoInstavel.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO);
+        assertThat(detalhada.redacao().status()).isEqualTo(StatusRedacao.AVALIADA);
+    }
+
+    @Test
+    void validacaoAconteceAntesDaTrava() throws Exception {
+        var ia = new IAPresa();
+        var comIAPresa = novoServico(redacoes, ia, LimitadoresDeTeste.padrao(), LIMITE_GLOBAL);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<RedacaoDetalhada> primeira = executor.submit(() ->
+                    comIAPresa.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO));
+            assertThat(ia.dentro.await(5, TimeUnit.SECONDS)).isTrue();
+
+            // Com a trava ocupada, um texto inválido recebe o erro de validação, não "em andamento"
+            assertThatThrownBy(() -> comIAPresa.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, "   ", OrigemRedacao.DIGITADO))
+                    .isInstanceOf(IllegalArgumentException.class);
+
+            ia.soltar.countDown();
+            primeira.get(10, TimeUnit.SECONDS);
+        } finally {
+            ia.soltar.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    /** IA que para dentro da chamada até o teste soltar: simula uma correção em andamento. */
+    private static final class IAPresa implements AvaliacaoIAPort {
+        final CountDownLatch dentro = new CountDownLatch(1);
+        final CountDownLatch soltar = new CountDownLatch(1);
+        final AtomicInteger chamadas = new AtomicInteger();
+
+        @Override
+        public ResultadoAvaliacaoIA avaliar(SolicitacaoAvaliacao solicitacao) {
+            chamadas.incrementAndGet();
+            dentro.countDown();
+            try {
+                if (!soltar.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("IA presa por tempo demais no teste");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+            return resultado();
+        }
     }
 }
