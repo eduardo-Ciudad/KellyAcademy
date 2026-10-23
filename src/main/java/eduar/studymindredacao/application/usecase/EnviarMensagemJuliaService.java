@@ -1,5 +1,7 @@
 package eduar.studymindredacao.application.usecase;
 
+import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
+import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.julia.ContextoJulia;
 import eduar.studymindredacao.domain.julia.ConversaJulia;
@@ -10,6 +12,7 @@ import eduar.studymindredacao.domain.julia.MensagemJulia;
 import eduar.studymindredacao.domain.julia.RespostaJulia;
 import eduar.studymindredacao.domain.julia.TipoLimiteJulia;
 import eduar.studymindredacao.domain.model.Redacao;
+import eduar.studymindredacao.domain.model.enums.RecursoIA;
 import eduar.studymindredacao.domain.port.ConversaJuliaRepositoryPort;
 import eduar.studymindredacao.domain.port.JuliaIAPort;
 import eduar.studymindredacao.domain.port.RedacaoRepositoryPort;
@@ -26,9 +29,13 @@ import java.util.UUID;
 
 /**
  * Pergunta à Júlia sobre a correção de uma redação do aluno.
- * Ordem pensada para nunca gastar cota à toa: dono da redação → correção existe → pergunta válida →
- * limite da conversa → teto global → reserva a vaga do dia → IA → salva a troca.
- * Qualquer falha depois da reserva devolve a vaga: o aluno não recebeu resposta.
+ * Ordem pensada para nunca gastar cota à toa:
+ * fora da trava, só leitura e validação: dono da redação → correção existe → pergunta válida;
+ * dentro da trava (uma pergunta por vez por aluno): conversa ativa → limite da conversa → reserva da cota
+ * (teto global e vaga do aluno) → IA → salva a troca.
+ * A conversa é lida DENTRO da trava (KELLY-SEC-003): duas perguntas simultâneas não carregam mais o mesmo
+ * histórico, não passam juntas pelo limite da conversa e não geram duas chamadas pagas.
+ * Qualquer falha depois da reserva devolve as duas vagas: o aluno não recebeu resposta.
  * Sem @Transactional de propósito (como na transcrição): a chamada à IA não segura conexão com o banco.
  */
 @Service
@@ -41,6 +48,8 @@ public class EnviarMensagemJuliaService {
     private final ConversaJuliaRepositoryPort conversaRepository;
     private final UsoIADiarioRepositoryPort usoRepository;
     private final JuliaIAPort juliaIA;
+    private final ReservadorCotaIA reservador;
+    private final LimitadorConcorrenciaIA limitador;
     private final PoliticaJulia politica;
     private final Clock clock;
 
@@ -50,6 +59,8 @@ public class EnviarMensagemJuliaService {
             ConversaJuliaRepositoryPort conversaRepository,
             UsoIADiarioRepositoryPort usoRepository,
             JuliaIAPort juliaIA,
+            ReservadorCotaIA reservador,
+            LimitadorConcorrenciaIA limitador,
             PoliticaJulia politica,
             Clock clock
     ) {
@@ -58,6 +69,8 @@ public class EnviarMensagemJuliaService {
         this.conversaRepository = conversaRepository;
         this.usoRepository = usoRepository;
         this.juliaIA = juliaIA;
+        this.reservador = reservador;
+        this.limitador = limitador;
         this.politica = politica;
         this.clock = clock;
     }
@@ -70,25 +83,28 @@ public class EnviarMensagemJuliaService {
         ContextoJulia contexto = montadorContexto.montar(redacao);
 
         LimitesJulia limites = politica.limites();
-        Instant agora = clock.instant();
-        MensagemJulia pergunta = MensagemJulia.doUsuario(texto, limites.tamanhoMaxPergunta(), agora);
-        ConversaJulia conversa = conversaAtiva(usuarioId, redacaoId, agora, limites);
-        conversa.garantirQuePodeReceberPergunta(limites);
+        MensagemJulia pergunta = MensagemJulia.doUsuario(texto, limites.tamanhoMaxPergunta(), clock.instant());
 
-        LocalDate hoje = LocalDate.now(clock);
-        reservarVagaDoDia(usuarioId, hoje);
+        try (var permissao = limitador.adquirir(usuarioId, RecursoIA.JULIA)) {
+            Instant agora = clock.instant();
+            ConversaJulia conversa = conversaAtiva(usuarioId, redacaoId, agora, limites);
+            conversa.garantirQuePodeReceberPergunta(limites);
 
-        RespostaJulia resposta = perguntar(usuarioId, hoje, contexto, conversa, pergunta, limites);
-        ConversaJulia salva = registrarESalvar(usuarioId, hoje, conversa, pergunta, resposta, limites);
+            LocalDate hoje = LocalDate.now(clock);
+            ReservaCota reserva = reservarVagaDoDia(usuarioId, hoje);
 
-        List<MensagemJulia> mensagens = salva.getMensagens();
-        int restantesHoje = politica.restantesHoje(usoRepository.contarMensagensJulia(usuarioId, hoje));
-        return new TrocaJulia(
-                mensagens.get(mensagens.size() - 2),
-                mensagens.get(mensagens.size() - 1),
-                salva.perguntasRestantes(limites),
-                restantesHoje
-        );
+            RespostaJulia resposta = perguntar(reserva, contexto, conversa, pergunta, limites);
+            ConversaJulia salva = registrarESalvar(reserva, conversa, pergunta, resposta, limites);
+
+            List<MensagemJulia> mensagens = salva.getMensagens();
+            int restantesHoje = politica.restantesHoje(usoRepository.contarMensagensJulia(usuarioId, hoje));
+            return new TrocaJulia(
+                    mensagens.get(mensagens.size() - 2),
+                    mensagens.get(mensagens.size() - 1),
+                    salva.perguntasRestantes(limites),
+                    restantesHoje
+            );
+        }
     }
 
     /**
@@ -108,23 +124,27 @@ public class EnviarMensagemJuliaService {
         return ConversaJulia.iniciar(usuarioId, redacaoId, agora);
     }
 
-    /** Teto do sistema antes da vaga do aluno (aproximado sob concorrência, como na correção e na transcrição). */
-    private void reservarVagaDoDia(UUID usuarioId, LocalDate hoje) {
-        if (usoRepository.somarMensagensJuliaDoDia(hoje) >= politica.tetoGlobal()) {
+    /**
+     * Teto do sistema e vaga do aluno, atômicos no reservador. Só traduz as exceções para as da Júlia,
+     * para o front continuar recebendo os mesmos códigos (JULIA_LIMITE_GLOBAL e JULIA_LIMITE_DIARIO).
+     */
+    private ReservaCota reservarVagaDoDia(UUID usuarioId, LocalDate hoje) {
+        try {
+            return reservador.reservar(usuarioId, RecursoIA.JULIA, hoje, politica.limiteDiario(), politica.tetoGlobal());
+        } catch (LimiteGlobalAtingidoException e) {
             throw new LimiteJuliaExcedidoException(TipoLimiteJulia.GLOBAL);
-        }
-        if (!usoRepository.reservarMensagemJulia(usuarioId, hoje, politica.limiteDiario())) {
+        } catch (LimiteDiarioAtingidoException e) {
             throw new LimiteJuliaExcedidoException(TipoLimiteJulia.DIARIO_USUARIO);
         }
     }
 
-    private RespostaJulia perguntar(UUID usuarioId, LocalDate hoje, ContextoJulia contexto, ConversaJulia conversa,
+    private RespostaJulia perguntar(ReservaCota reserva, ContextoJulia contexto, ConversaJulia conversa,
                                     MensagemJulia pergunta, LimitesJulia limites) {
         try {
             return juliaIA.responder(contexto, conversa.historicoRecente(limites.historicoMaximo()), pergunta.conteudo());
         } catch (RuntimeException e) {
             log.warn("Júlia falhou ({}): {}", e.getClass().getSimpleName(), LogSeguro.limpar(e.getMessage()));
-            usoRepository.liberarMensagemJulia(usuarioId, hoje);
+            reserva.liberar();
             if (e instanceof JuliaIndisponivelException indisponivel) {
                 throw indisponivel;
             }
@@ -132,7 +152,7 @@ public class EnviarMensagemJuliaService {
         }
     }
 
-    private ConversaJulia registrarESalvar(UUID usuarioId, LocalDate hoje, ConversaJulia conversa,
+    private ConversaJulia registrarESalvar(ReservaCota reserva, ConversaJulia conversa,
                                            MensagemJulia pergunta, RespostaJulia resposta, LimitesJulia limites) {
         try {
             Instant respondidaEm = clock.instant();
@@ -140,7 +160,7 @@ public class EnviarMensagemJuliaService {
             return conversaRepository.salvar(conversa);
         } catch (RuntimeException e) {
             log.warn("Não foi possível salvar a conversa da Júlia: {}", LogSeguro.limpar(e.getMessage()));
-            usoRepository.liberarMensagemJulia(usuarioId, hoje);
+            reserva.liberar();
             throw e;
         }
     }

@@ -1,6 +1,9 @@
 package eduar.studymindredacao.application.usecase;
 
+import eduar.studymindredacao.domain.exception.IAOcupadaException;
+import eduar.studymindredacao.domain.exception.IAOcupadaException.Motivo;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
+import eduar.studymindredacao.domain.julia.ContextoJulia;
 import eduar.studymindredacao.domain.julia.ConversaJulia;
 import eduar.studymindredacao.domain.julia.JuliaIndisponivelException;
 import eduar.studymindredacao.domain.julia.LimiteJuliaExcedidoException;
@@ -8,6 +11,7 @@ import eduar.studymindredacao.domain.julia.MensagemJulia;
 import eduar.studymindredacao.domain.julia.PapelMensagem;
 import eduar.studymindredacao.domain.julia.PerguntaInvalidaException;
 import eduar.studymindredacao.domain.julia.RedacaoSemCorrecaoException;
+import eduar.studymindredacao.domain.julia.RespostaJulia;
 import eduar.studymindredacao.domain.julia.StatusConversa;
 import eduar.studymindredacao.domain.julia.TipoLimiteJulia;
 import eduar.studymindredacao.domain.model.Avaliacao;
@@ -16,8 +20,10 @@ import eduar.studymindredacao.domain.model.Redacao;
 import eduar.studymindredacao.domain.model.Tema;
 import eduar.studymindredacao.domain.model.enums.OrigemRedacao;
 import eduar.studymindredacao.domain.model.enums.OrigemTema;
+import eduar.studymindredacao.domain.model.enums.RecursoIA;
 import eduar.studymindredacao.domain.model.enums.StatusRedacao;
 import eduar.studymindredacao.domain.model.enums.TipoRedacao;
+import eduar.studymindredacao.domain.port.JuliaIAPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +32,12 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -38,17 +50,20 @@ class EnviarMensagemJuliaServiceTest {
     private final TemaRepositoryEmMemoria temas = new TemaRepositoryEmMemoria();
     private final ConversaJuliaRepositoryEmMemoria conversas = new ConversaJuliaRepositoryEmMemoria();
     private final UsoIADiarioEmMemoria usos = new UsoIADiarioEmMemoria();
+    private final UsoIAGlobalEmMemoria global = new UsoIAGlobalEmMemoria();
     private final JuliaIAFake julia = new JuliaIAFake();
     private final RelogioAjustavel relogio = RelogioAjustavel.em("2026-10-22T15:00:00Z");
 
     private final UUID alunoId = UUID.randomUUID();
     private Redacao redacao;
+    private UUID temaId;
     private EnviarMensagemJuliaService service;
 
     @BeforeEach
     void setUp() {
         var tema = temas.salvar(new Tema(null, "Desafios para a formação educacional de surdos no Brasil", null,
                 OrigemTema.ENEM_OFICIAL, (short) 2017, true, null));
+        temaId = tema.id();
         redacao = redacaoCorrigida(alunoId, tema.id());
         service = criarService(POLITICA);
     }
@@ -150,7 +165,7 @@ class EnviarMensagemJuliaServiceTest {
                 .isInstanceOf(RedacaoNaoEncontradaException.class);
 
         assertThat(julia.chamadas()).isEmpty();
-        assertThat(usos.somarMensagensJuliaDoDia(hoje())).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isZero();
     }
 
     @Test
@@ -195,6 +210,7 @@ class EnviarMensagemJuliaServiceTest {
 
         assertThat(usadasHoje()).isEqualTo(10);
         assertThat(julia.chamadas()).hasSize(10);
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isEqualTo(10);
     }
 
     @Test
@@ -213,9 +229,9 @@ class EnviarMensagemJuliaServiceTest {
 
     @Test
     void tetoGlobalERecusadoAntesDeReservarAVagaDoAluno() {
-        var outroAluno = UUID.randomUUID();
-        usos.reservarMensagemJulia(outroAluno, hoje(), 20);
-        usos.reservarMensagemJulia(outroAluno, hoje(), 20);
+        // O teto do sistema agora é o contador global (V24), não mais a soma da tabela de cada aluno
+        global.reservar(RecursoIA.JULIA, hoje(), 2);
+        global.reservar(RecursoIA.JULIA, hoje(), 2);
         var comTetoBaixo = criarService(PoliticaJulia.de(10, 500, 6, 24, 20, 2));
 
         assertThatThrownBy(() -> comTetoBaixo.enviar(alunoId, redacao.id(), "Por que fiquei com 80?"))
@@ -224,6 +240,7 @@ class EnviarMensagemJuliaServiceTest {
 
         assertThat(usadasHoje()).isZero();
         assertThat(julia.chamadas()).isEmpty();
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isEqualTo(2);
     }
 
     // ---------- falhas depois da reserva devolvem a vaga ----------
@@ -237,6 +254,7 @@ class EnviarMensagemJuliaServiceTest {
                 .isSameAs(falha);
 
         assertThat(usadasHoje()).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isZero();
         assertThat(conversas.todas()).isEmpty();
     }
 
@@ -251,6 +269,7 @@ class EnviarMensagemJuliaServiceTest {
                 .hasCause(causa);
 
         assertThat(usadasHoje()).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isZero();
     }
 
     @Test
@@ -262,13 +281,163 @@ class EnviarMensagemJuliaServiceTest {
                 .isSameAs(falha);
 
         assertThat(usadasHoje()).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isZero();
+    }
+
+    // ---------- concorrência (KELLY-SEC-002 e SEC-003) ----------
+
+    @Test
+    void primeiraPerguntaContaUmaVagaGlobal() {
+        service.enviar(alunoId, redacao.id(), "Por que fiquei com 80 na C3?");
+
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isEqualTo(1);
+        assertThat(usadasHoje()).isEqualTo(1);
+    }
+
+    @Test
+    void perguntaSimultaneaNaoFuraOLimiteDaConversa() throws Exception {
+        for (int i = 1; i <= 9; i++) {
+            service.enviar(alunoId, redacao.id(), "pergunta " + i);
+        }
+        var presa = new JuliaIAPresa();
+        var comJuliaPresa = criarService(POLITICA, presa, LimitadoresDeTeste.padrao());
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<TrocaJulia> decima = executor.submit(() -> comJuliaPresa.enviar(alunoId, redacao.id(), "pergunta 10"));
+            presa.esperarEntrada();
+
+            // Antes: esta lia a mesma conversa com 9 perguntas, passava no limite e virava a 11ª chamada paga
+            assertThatThrownBy(() -> comJuliaPresa.enviar(alunoId, redacao.id(), "pergunta simultânea"))
+                    .isInstanceOfSatisfying(IAOcupadaException.class, e -> {
+                        assertThat(e.getMotivo()).isEqualTo(Motivo.ALUNO_EM_ANDAMENTO);
+                        assertThat(e.getRecurso()).isEqualTo(RecursoIA.JULIA);
+                    });
+            assertThat(usadasHoje()).isEqualTo(10);
+            assertThat(presa.chamadas).hasValue(1);
+
+            presa.soltar.countDown();
+            assertThat(decima.get(10, TimeUnit.SECONDS).restantesConversa()).isZero();
+        } finally {
+            presa.soltar.countDown();
+            executor.shutdownNow();
+        }
+
+        // Com a 10ª já salva, a próxima é recusada pelo limite da conversa, sem chamar a IA
+        assertThatThrownBy(() -> comJuliaPresa.enviar(alunoId, redacao.id(), "pergunta 11"))
+                .isInstanceOf(LimiteJuliaExcedidoException.class)
+                .extracting("tipo").isEqualTo(TipoLimiteJulia.CONVERSA);
+
+        assertThat(julia.chamadas().size() + presa.chamadas.get()).isEqualTo(10);
+        assertThat(usadasHoje()).isEqualTo(10);
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isEqualTo(10);
+        assertThat(conversas.todas()).singleElement()
+                .satisfies(c -> assertThat(c.getMensagens()).hasSize(20));
+    }
+
+    @Test
+    void perguntaSobreOutraRedacaoTambemEsperaATravaDoAluno() throws Exception {
+        var outraRedacao = redacaoCorrigida(alunoId, temaId);
+        var presa = new JuliaIAPresa();
+        var comJuliaPresa = criarService(POLITICA, presa, LimitadoresDeTeste.padrao());
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<TrocaJulia> primeira = executor.submit(() -> comJuliaPresa.enviar(alunoId, redacao.id(), "sobre a A"));
+            presa.esperarEntrada();
+
+            assertThatThrownBy(() -> comJuliaPresa.enviar(alunoId, outraRedacao.id(), "sobre a B"))
+                    .isInstanceOfSatisfying(IAOcupadaException.class,
+                            e -> assertThat(e.getMotivo()).isEqualTo(Motivo.ALUNO_EM_ANDAMENTO));
+            assertThat(usadasHoje()).isEqualTo(1);
+
+            presa.soltar.countDown();
+            primeira.get(10, TimeUnit.SECONDS);
+        } finally {
+            presa.soltar.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void falhaDaJuliaSoltaATravaParaOAlunoPerguntarDeNovo() {
+        julia.falharCom(new JuliaIndisponivelException("Gemini fora do ar"));
+        assertThatThrownBy(() -> service.enviar(alunoId, redacao.id(), "Por que fiquei com 80?"))
+                .isInstanceOf(JuliaIndisponivelException.class);
+        julia.falharCom(null);
+
+        TrocaJulia troca = service.enviar(alunoId, redacao.id(), "Por que fiquei com 80?");
+
+        assertThat(troca).isNotNull();
+        assertThat(usadasHoje()).isEqualTo(1);
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isEqualTo(1);
+    }
+
+    @Test
+    void perguntaInvalidaNaoDisputaATrava() throws Exception {
+        var presa = new JuliaIAPresa();
+        var comJuliaPresa = criarService(POLITICA, presa, LimitadoresDeTeste.padrao());
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<TrocaJulia> primeira = executor.submit(() -> comJuliaPresa.enviar(alunoId, redacao.id(), "pergunta"));
+            presa.esperarEntrada();
+
+            // Com a trava ocupada, a pergunta vazia recebe o erro de validação, não "em andamento"
+            assertThatThrownBy(() -> comJuliaPresa.enviar(alunoId, redacao.id(), "   "))
+                    .isInstanceOf(PerguntaInvalidaException.class);
+
+            presa.soltar.countDown();
+            primeira.get(10, TimeUnit.SECONDS);
+        } finally {
+            presa.soltar.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void corrigirNaoBloqueiaPerguntarAJulia() {
+        var limitador = LimitadoresDeTeste.padrao();
+        var comLimitadorCompartilhado = criarService(POLITICA, julia, limitador);
+
+        try (var correcao = limitador.adquirir(alunoId, RecursoIA.CORRECAO)) {
+            assertThat(comLimitadorCompartilhado.enviar(alunoId, redacao.id(), "Por que fiquei com 80?")).isNotNull();
+        }
     }
 
     // ---------- apoio ----------
 
     private EnviarMensagemJuliaService criarService(PoliticaJulia politica) {
+        return criarService(politica, julia, LimitadoresDeTeste.padrao());
+    }
+
+    private EnviarMensagemJuliaService criarService(PoliticaJulia politica, JuliaIAPort ia,
+                                                    LimitadorConcorrenciaIA limitador) {
         return new EnviarMensagemJuliaService(redacoes, new MontadorContextoJulia(avaliacoes, temas), conversas,
-                usos, julia, politica, relogio);
+                usos, ia, new ReservadorCotaIA(global, usos), limitador, politica, relogio);
+    }
+
+    /** Júlia que para dentro da chamada até o teste soltar: simula uma pergunta em andamento. */
+    private static final class JuliaIAPresa implements JuliaIAPort {
+        final CountDownLatch dentro = new CountDownLatch(1);
+        final CountDownLatch soltar = new CountDownLatch(1);
+        final AtomicInteger chamadas = new AtomicInteger();
+
+        @Override
+        public RespostaJulia responder(ContextoJulia contexto, List<MensagemJulia> historico, String pergunta) {
+            chamadas.incrementAndGet();
+            dentro.countDown();
+            try {
+                if (!soltar.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Júlia presa por tempo demais no teste");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+            return JuliaIAFake.RESPOSTA_PADRAO;
+        }
+
+        void esperarEntrada() throws InterruptedException {
+            assertThat(dentro.await(5, TimeUnit.SECONDS)).as("a pergunta não chegou à IA").isTrue();
+        }
     }
 
     private LocalDate hoje() {
