@@ -7,13 +7,39 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConfiguracaoInicialTest {
 
     private static ConfiguracaoInicial valida() {
-        return new ConfiguracaoInicial(3, 30, 3, 30, "gemini-3.5-flash-lite", "gemini-3.5-flash-lite",
+        return new ConfiguracaoInicial(30, 30, "gemini-3.5-flash-lite", "gemini-3.5-flash-lite",
                 false, "smtp.gmail.com", "587", "", "", "");
     }
 
     private static ConfiguracaoInicial comEmail(String porta, String usuario, String senha, String frontendUrl) {
-        return new ConfiguracaoInicial(3, 30, 3, 30, "gemini-3.5-flash-lite", "gemini-3.5-flash-lite",
+        return new ConfiguracaoInicial(30, 30, "gemini-3.5-flash-lite", "gemini-3.5-flash-lite",
                 true, "smtp.gmail.com", porta, usuario, senha, frontendUrl);
+    }
+
+    @Test
+    void recusaTetosZeradosOuNegativosComUmaMensagemSoPorTeto() {
+        var config = new ConfiguracaoInicial(0, -1, "m", "m", false, "", "", "", "", "");
+
+        assertThat(config.validar())
+                .contains("LIMITE_CORRECOES_GLOBAL deve ser maior que zero")
+                .contains("LIMITE_TRANSCRICOES_GLOBAL deve ser maior que zero")
+                .noneMatch(e -> e.contains("limite diário do plano Pro"));
+    }
+
+    @Test
+    void recusaTetoGlobalMenorQueOLimiteDoPro() {
+        var config = new ConfiguracaoInicial(9, 9, "m", "m", false, "", "", "", "", "");
+
+        assertThat(config.validar())
+                .contains("LIMITE_CORRECOES_GLOBAL deve ser pelo menos 10 (limite diário do plano Pro)")
+                .contains("LIMITE_TRANSCRICOES_GLOBAL deve ser pelo menos 10 (limite diário do plano Pro)");
+    }
+
+    @Test
+    void aceitaTetoIgualAoLimiteDoPro() {
+        var config = new ConfiguracaoInicial(10, 10, "m", "m", false, "", "", "", "", "");
+
+        assertThat(config.validar()).isEmpty();
     }
 
     @Test
@@ -23,32 +49,14 @@ class ConfiguracaoInicialTest {
 
     @Test
     void emailDesligadoNaoExigeCredenciais() {
-        var config = new ConfiguracaoInicial(3, 30, 3, 30, "m", "m", false, "", "", "", "", "");
+        var config = new ConfiguracaoInicial(30, 30, "m", "m", false, "", "", "", "", "");
 
         assertThat(config.validar()).isEmpty();
     }
 
     @Test
-    void recusaLimitesZeradosOuNegativos() {
-        var config = new ConfiguracaoInicial(0, 30, -1, 30, "m", "m", false, "", "", "", "", "");
-
-        assertThat(config.validar())
-                .anyMatch(e -> e.startsWith("LIMITE_CORRECOES_DIARIAS"))
-                .anyMatch(e -> e.startsWith("LIMITE_TRANSCRICOES_DIARIAS"));
-    }
-
-    @Test
-    void recusaLimiteDoAlunoMaiorQueOTetoGlobal() {
-        var config = new ConfiguracaoInicial(40, 30, 3, 2, "m", "m", false, "", "", "", "", "");
-
-        assertThat(config.validar())
-                .contains("LIMITE_CORRECOES_DIARIAS não pode ser maior que LIMITE_CORRECOES_GLOBAL")
-                .contains("LIMITE_TRANSCRICOES_DIARIAS não pode ser maior que LIMITE_TRANSCRICOES_GLOBAL");
-    }
-
-    @Test
     void recusaModeloDaTranscricaoVazio() {
-        var config = new ConfiguracaoInicial(3, 30, 3, 30, "m", " ", false, "", "", "", "", "");
+        var config = new ConfiguracaoInicial(30, 30, "m", " ", false, "", "", "", "", "");
 
         assertThat(config.validar()).anyMatch(e -> e.startsWith("GEMINI_MODELO_TRANSCRICAO"));
     }
@@ -88,6 +96,13 @@ class ConfiguracaoInicialTest {
                 .contains("APP_FRONTEND_URL não deve terminar com barra");
         assertThat(comEmail("587", "u", "s", "app.kellyacademy.com.br").validar())
                 .anyMatch(e -> e.contains("URL completa"));
+    }
+
+    @Test
+    void resumoMostraOsLimitesDosPlanosEOsTetos() {
+        assertThat(valida().resumoSeguro())
+                .contains("correções: Grátis 3 e Pro 10 por aluno (teto 30)")
+                .contains("transcrições: Grátis 2 e Pro 10 por aluno (teto 30)");
     }
 
     @Test
