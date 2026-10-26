@@ -1,21 +1,25 @@
 package eduar.studymindredacao.application.usecase;
 
+import eduar.studymindredacao.domain.exception.RecursoExclusivoProException;
 import eduar.studymindredacao.domain.model.PrevisaoTema;
 import eduar.studymindredacao.domain.model.Tema;
 import eduar.studymindredacao.domain.model.enums.ForcaEvidencia;
 import eduar.studymindredacao.domain.model.enums.OrigemTema;
+import eduar.studymindredacao.domain.model.enums.RecursoPro;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ListarTemasPossiveisServiceTest {
     private final TemaRepositoryEmMemoria temas = new TemaRepositoryEmMemoria();
     private final PrevisaoTemaRepositoryEmMemoria previsoes = new PrevisaoTemaRepositoryEmMemoria();
     private final UsuarioTemaRepositoryEmMemoria usuarioTemas = new UsuarioTemaRepositoryEmMemoria();
-    private final ListarTemasPossiveisService service = new ListarTemasPossiveisService(temas, previsoes, usuarioTemas);
+    private final ListarTemasPossiveisService service =
+            new ListarTemasPossiveisService(temas, previsoes, usuarioTemas, PlanosDeTeste.pro());
     private final UUID aluno = UUID.randomUUID();
 
     @Test
@@ -46,6 +50,16 @@ class ListarTemasPossiveisServiceTest {
         temaPossivel("Possível", 1, ForcaEvidencia.VALE_TREINAR, true);
 
         assertThat(service.listar(aluno)).extracting(t -> t.tema().titulo()).containsExactly("Possível");
+    }
+
+    @Test
+    void alunoGratisNaoVeOsTemasPossiveis() {
+        temaPossivel("Possível", 1, ForcaEvidencia.FORTE, true);
+        var doGratis = new ListarTemasPossiveisService(temas, previsoes, usuarioTemas, PlanosDeTeste.gratis());
+
+        assertThatThrownBy(() -> doGratis.listar(aluno))
+                .isInstanceOfSatisfying(RecursoExclusivoProException.class,
+                        e -> assertThat(e.getRecurso()).isEqualTo(RecursoPro.TEMAS_POSSIVEIS));
     }
 
     private Tema temaPossivel(String titulo, int ranking, ForcaEvidencia forca, boolean ativo) {

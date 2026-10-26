@@ -1,9 +1,11 @@
 package eduar.studymindredacao.application.usecase;
 
+import eduar.studymindredacao.domain.exception.RecursoExclusivoProException;
 import eduar.studymindredacao.domain.exception.TemaNaoAdicionavelException;
 import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.model.Tema;
 import eduar.studymindredacao.domain.model.enums.OrigemTema;
+import eduar.studymindredacao.domain.model.enums.RecursoPro;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -14,7 +16,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class GerenciarMeusTemasServiceTest {
     private final TemaRepositoryEmMemoria temas = new TemaRepositoryEmMemoria();
     private final UsuarioTemaRepositoryEmMemoria usuarioTemas = new UsuarioTemaRepositoryEmMemoria();
-    private final GerenciarMeusTemasService service = new GerenciarMeusTemasService(temas, usuarioTemas);
+    private final GerenciarMeusTemasService service =
+            new GerenciarMeusTemasService(temas, usuarioTemas, PlanosDeTeste.pro());
+    private final GerenciarMeusTemasService doGratis =
+            new GerenciarMeusTemasService(temas, usuarioTemas, PlanosDeTeste.gratis());
     private final UUID aluno = UUID.randomUUID();
 
     @Test
@@ -62,6 +67,28 @@ class GerenciarMeusTemasServiceTest {
                 .isInstanceOf(TemaNaoEncontradoException.class);
 
         service.remover(aluno, desativado.id());
+        assertThat(usuarioTemas.listarTemaIds(aluno)).isEmpty();
+    }
+
+    // ---------- plano ----------
+
+    @Test
+    void alunoGratisNaoAdicionaENadaEGravado() {
+        var tema = temas.salvar(new Tema(null, "Possível", null, OrigemTema.PREVISAO, (short) 2026, true, null));
+
+        assertThatThrownBy(() -> doGratis.adicionar(aluno, tema.id()))
+                .isInstanceOfSatisfying(RecursoExclusivoProException.class,
+                        e -> assertThat(e.getRecurso()).isEqualTo(RecursoPro.TEMAS_POSSIVEIS));
+        assertThat(usuarioTemas.listarTemaIds(aluno)).isEmpty();
+    }
+
+    @Test
+    void alunoGratisConsegueRemoverOQueAdicionouQuandoEraPro() {
+        var tema = temas.salvar(new Tema(null, "Possível", null, OrigemTema.PREVISAO, (short) 2026, true, null));
+        service.adicionar(aluno, tema.id());
+
+        doGratis.remover(aluno, tema.id());
+
         assertThat(usuarioTemas.listarTemaIds(aluno)).isEmpty();
     }
 }
