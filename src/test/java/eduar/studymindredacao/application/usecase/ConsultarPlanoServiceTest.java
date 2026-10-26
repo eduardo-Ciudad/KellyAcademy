@@ -137,4 +137,68 @@ class ConsultarPlanoServiceTest {
     void exigirSemRecursoLancaAntesDeConsultarAssinaturas() {
         assertThatThrownBy(() -> service.exigir(ALUNO, null)).isInstanceOf(NullPointerException.class);
     }
+
+    // ---------- detalhar ----------
+
+    @Test
+    void detalharSemAssinaturaEGratisSemAssinaturaVigente() {
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of());
+
+        var detalhe = service.detalhar(ALUNO);
+
+        assertThat(detalhe.plano()).isEqualTo(Plano.GRATIS);
+        assertThat(detalhe.assinaturaVigente()).isNull();
+    }
+
+    @Test
+    void detalharComAssinaturaVigenteDevolveProComEla() {
+        var vigente = vigente(StatusAssinatura.ACTIVE);
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of(vigente));
+
+        var detalhe = service.detalhar(ALUNO);
+
+        assertThat(detalhe.plano()).isEqualTo(Plano.PRO);
+        assertThat(detalhe.assinaturaVigente()).isSameAs(vigente);
+    }
+
+    @Test
+    void detalharComDuasValidasDevolveADeMaiorPeriodo() {
+        var curta = assinatura("sub_curta", StatusAssinatura.ACTIVE, AGORA.plusDays(5), true);
+        var longa = assinatura("sub_longa", StatusAssinatura.ACTIVE, AGORA.plusDays(300), false);
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of(curta, longa));
+
+        assertThat(service.detalhar(ALUNO).assinaturaVigente()).isSameAs(longa);
+    }
+
+    @Test
+    void detalharIgnoraAssinaturaQueNaoDaAcessoMesmoComPeriodoMaior() {
+        var atrasada = assinatura("sub_atrasada", StatusAssinatura.PAST_DUE, AGORA.plusDays(300), false);
+        var ativa = assinatura("sub_ativa", StatusAssinatura.ACTIVE, AGORA.plusDays(5), false);
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of(atrasada, ativa));
+
+        assertThat(service.detalhar(ALUNO).assinaturaVigente()).isSameAs(ativa);
+    }
+
+    @Test
+    void detalharComPagamentoAtrasadoEGratisSemAssinatura() {
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of(vigente(StatusAssinatura.PAST_DUE)));
+
+        var detalhe = service.detalhar(ALUNO);
+
+        assertThat(detalhe.plano()).isEqualTo(Plano.GRATIS);
+        assertThat(detalhe.assinaturaVigente()).isNull();
+    }
+
+    @Test
+    void detalharComAssinaturaVencidaEGratisSemAssinatura() {
+        when(assinaturas.listarPorUsuario(ALUNO))
+                .thenReturn(List.of(assinatura("sub_1", StatusAssinatura.ACTIVE, AGORA.minusDays(1), false)));
+
+        assertThat(service.detalhar(ALUNO)).isEqualTo(PlanoDoUsuario.gratis());
+    }
+
+    @Test
+    void detalharExigeId() {
+        assertThatThrownBy(() -> service.detalhar(null)).isInstanceOf(NullPointerException.class);
+    }
 }

@@ -1,6 +1,7 @@
 package eduar.studymindredacao.application.usecase;
 
 import eduar.studymindredacao.domain.exception.RecursoExclusivoProException;
+import eduar.studymindredacao.domain.model.Assinatura;
 import eduar.studymindredacao.domain.model.enums.Plano;
 import eduar.studymindredacao.domain.model.enums.RecursoPro;
 import eduar.studymindredacao.domain.port.AssinaturaRepositoryPort;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -27,11 +29,21 @@ public class ConsultarPlanoService {
 
     /** PRO se alguma assinatura dá acesso agora; senão GRATIS. */
     public Plano doUsuario(UUID usuarioId) {
+        return detalhar(usuarioId).plano();
+    }
+
+    /**
+     * Plano e a assinatura que dá o acesso. Com mais de uma válida, vale a que termina por último.
+     * Assinatura com pagamento atrasado (PAST_DUE) ou vencida não aparece: o aluno fica GRATIS (MVP, sem aviso).
+     */
+    public PlanoDoUsuario detalhar(UUID usuarioId) {
         Objects.requireNonNull(usuarioId, "usuarioId é obrigatório");
         OffsetDateTime agora = OffsetDateTime.now(clock);
-        boolean pro = assinaturaRepository.listarPorUsuario(usuarioId).stream()
-                .anyMatch(a -> a.daAcessoPro(agora));
-        return pro ? Plano.PRO : Plano.GRATIS;
+        return assinaturaRepository.listarPorUsuario(usuarioId).stream()
+                .filter(a -> a.daAcessoPro(agora))
+                .max(Comparator.comparing(Assinatura::periodoAtualFim))
+                .map(PlanoDoUsuario::pro)
+                .orElseGet(PlanoDoUsuario::gratis);
     }
 
     /** Barra o recurso quando o plano do aluno não o libera. */
