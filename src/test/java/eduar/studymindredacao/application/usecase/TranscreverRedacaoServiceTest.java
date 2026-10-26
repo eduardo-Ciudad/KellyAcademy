@@ -10,6 +10,7 @@ import eduar.studymindredacao.domain.exception.TranscricaoIAException;
 import eduar.studymindredacao.domain.model.ImagemRedacao;
 import eduar.studymindredacao.domain.model.ImagensDeTeste;
 import eduar.studymindredacao.domain.model.ResultadoTranscricao;
+import eduar.studymindredacao.domain.model.enums.Plano;
 import eduar.studymindredacao.domain.model.enums.RecursoIA;
 import eduar.studymindredacao.domain.port.TranscricaoIAPort;
 import org.junit.jupiter.api.Test;
@@ -31,9 +32,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class TranscreverRedacaoServiceTest {
-    private static final int LIMITE = 3;
+    private static final int LIMITE = 2; // Plano.GRATIS
+    private static final int LIMITE_PRO = 10;
     private static final int LIMITE_GLOBAL = 30;
     // 01:30 UTC do dia 29 = 22:30 do dia 28 em São Paulo
     private static final Clock RELOGIO = Clock.fixed(Instant.parse("2026-09-29T01:30:00Z"), ZoneId.of("America/Sao_Paulo"));
@@ -43,13 +49,19 @@ class TranscreverRedacaoServiceTest {
     private final UsoIADiarioEmMemoria uso = new UsoIADiarioEmMemoria();
     private final UsoIAGlobalEmMemoria global = new UsoIAGlobalEmMemoria();
     private final TranscricaoIAFake ia = new TranscricaoIAFake();
+    private final ConsultarPlanoService planos = mock(ConsultarPlanoService.class);
+
+    {
+        when(planos.doUsuario(any())).thenReturn(Plano.GRATIS);
+    }
+
     private final TranscreverRedacaoService service = novoServico(ia, LimitadoresDeTeste.padrao(), LIMITE_GLOBAL);
     private final ImagemRedacao foto = ImagemRedacao.de(ImagensDeTeste.jpeg());
 
     private TranscreverRedacaoService novoServico(TranscricaoIAPort transcricaoIA, LimitadorConcorrenciaIA limitador,
                                                   int tetoGlobal) {
         return new TranscreverRedacaoService(uso, transcricaoIA, new ReservadorCotaIA(global, uso), limitador,
-                RELOGIO, LIMITE, tetoGlobal);
+                planos, RELOGIO, tetoGlobal);
     }
 
     @Test
@@ -94,7 +106,7 @@ class TranscreverRedacaoServiceTest {
     }
 
     @Test
-    void bloqueiaAQuartaTranscricaoDoDiaSemChamarAIA() {
+    void gratisBloqueiaATerceiraTranscricaoDoDiaSemChamarAIA() {
         for (int i = 0; i < LIMITE; i++) {
             service.transcrever(alunoId, List.of(foto));
         }
@@ -239,6 +251,42 @@ class TranscreverRedacaoServiceTest {
         try (var correcao = limitador.adquirir(alunoId, RecursoIA.CORRECAO)) {
             assertThat(comLimitadorCompartilhado.transcrever(alunoId, List.of(foto)).linhas()).isNotEmpty();
         }
+    }
+
+    // ---------- limite por plano ----------
+
+    @Test
+    void proFazATerceiraEEBarradoSoNaDecimaPrimeira() {
+        when(planos.doUsuario(alunoId)).thenReturn(Plano.PRO);
+
+        for (int i = 0; i < LIMITE_PRO; i++) {
+            service.transcrever(alunoId, List.of(foto));
+        }
+
+        assertThat(uso.usoDoDia(alunoId, HOJE_EM_SP).qtdTranscricoes()).isEqualTo(LIMITE_PRO);
+        assertThatThrownBy(() -> service.transcrever(alunoId, List.of(foto)))
+                .isInstanceOfSatisfying(LimiteDiarioAtingidoException.class,
+                        e -> assertThat(e.getLimite()).isEqualTo(LIMITE_PRO));
+        assertThat(ia.chamadas()).hasSize(LIMITE_PRO);
+    }
+
+    @Test
+    void quantidadeInvalidaFalhaSemConsultarOPlano() {
+        assertThatThrownBy(() -> service.transcrever(alunoId, List.of()))
+                .isInstanceOf(ImagemInvalidaException.class);
+
+        verifyNoInteractions(planos);
+    }
+
+    @Test
+    void falhaAoConsultarOPlanoNaoReservaVaga() {
+        when(planos.doUsuario(alunoId)).thenThrow(new IllegalStateException("banco fora"));
+
+        assertThatThrownBy(() -> service.transcrever(alunoId, List.of(foto)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(uso.usoDoDia(alunoId, HOJE_EM_SP).qtdTranscricoes()).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.TRANSCRICAO, HOJE_EM_SP)).isZero();
+        assertThat(ia.chamadas()).isEmpty();
     }
 
     /**

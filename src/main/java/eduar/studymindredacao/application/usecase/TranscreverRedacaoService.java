@@ -19,7 +19,7 @@ import java.util.UUID;
 
 /**
  * Transcreve a foto de uma redação manuscrita:
- * valida a quantidade de fotos → permissão de concorrência → reserva a cota (teto global e vaga do aluno)
+ * valida a quantidade de fotos → permissão de concorrência → reserva a cota (teto global e vaga do aluno, pelo plano)
  * → IA (projeto próprio no Google Cloud) → registra os tokens.
  * Se a IA falhar, ou não encontrar redação na foto, as duas vagas são devolvidas: o aluno não recebeu nada útil.
  * A permissão (1 transcrição por aluno, N no sistema) só é solta depois da contabilidade (KELLY-SEC-002).
@@ -35,8 +35,8 @@ public class TranscreverRedacaoService {
     private final TranscricaoIAPort transcricaoIA;
     private final ReservadorCotaIA reservador;
     private final LimitadorConcorrenciaIA limitador;
+    private final ConsultarPlanoService consultarPlano;
     private final Clock clock;
-    private final int limiteDiario;
     private final int limiteGlobal;
 
     public TranscreverRedacaoService(
@@ -44,16 +44,16 @@ public class TranscreverRedacaoService {
             TranscricaoIAPort transcricaoIA,
             ReservadorCotaIA reservador,
             LimitadorConcorrenciaIA limitador,
+            ConsultarPlanoService consultarPlano,
             Clock clock,
-            @Value("${app.limites.transcricoes-diarias-free}") int limiteDiario,
             @Value("${app.limites.transcricoes-diarias-globais}") int limiteGlobal
     ) {
         this.usoRepository = usoRepository;
         this.transcricaoIA = transcricaoIA;
         this.reservador = reservador;
         this.limitador = limitador;
+        this.consultarPlano = consultarPlano;
         this.clock = clock;
-        this.limiteDiario = limiteDiario;
         this.limiteGlobal = limiteGlobal;
     }
 
@@ -62,7 +62,9 @@ public class TranscreverRedacaoService {
 
         try (var permissao = limitador.adquirir(usuarioId, RecursoIA.TRANSCRICAO)) {
             LocalDate hoje = LocalDate.now(clock);
-            ReservaCota reserva = reservador.reservar(usuarioId, RecursoIA.TRANSCRICAO, hoje, limiteDiario, limiteGlobal);
+            // Antes da reserva: se a consulta do plano falhar, não fica vaga presa
+            int limiteAluno = consultarPlano.doUsuario(usuarioId).limiteDiario(RecursoIA.TRANSCRICAO);
+            ReservaCota reserva = reservador.reservar(usuarioId, RecursoIA.TRANSCRICAO, hoje, limiteAluno, limiteGlobal);
 
             ResultadoTranscricao resultado;
             try {
