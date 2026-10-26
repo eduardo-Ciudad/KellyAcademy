@@ -21,7 +21,6 @@ import eduar.studymindredacao.domain.exception.TemaNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.TokenInvalidoException;
 import eduar.studymindredacao.domain.exception.TranscricaoIAException;
 import eduar.studymindredacao.domain.exception.WebhookInvalidoException;
-import eduar.studymindredacao.domain.julia.AcessoJuliaNegadoException;
 import eduar.studymindredacao.domain.julia.JuliaIndisponivelException;
 import eduar.studymindredacao.domain.julia.LimiteJuliaExcedidoException;
 import eduar.studymindredacao.domain.julia.PerguntaInvalidaException;
@@ -54,7 +53,6 @@ public class GlobalExceptionHandler {
     static final String CODIGO_ASSINATURA_EXISTENTE = "ASSINATURA_EXISTENTE";
     static final String CODIGO_PAGAMENTO_INDISPONIVEL = "PAGAMENTO_INDISPONIVEL";
     static final String CODIGO_PLANO_PRO = "PLANO_PRO_NECESSARIO";
-    static final String CODIGO_JULIA_PLANO = "JULIA_PLANO";
     static final String CODIGO_JULIA_SEM_CORRECAO = "JULIA_SEM_CORRECAO";
     static final String CODIGO_JULIA_LIMITE_CONVERSA = "JULIA_LIMITE_CONVERSA";
     static final String CODIGO_JULIA_LIMITE_DIARIO = "JULIA_LIMITE_DIARIO";
@@ -263,13 +261,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PerguntaInvalidaException.class)
     public ProblemDetail perguntaInvalida(PerguntaInvalidaException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-    }
-
-    @ExceptionHandler(AcessoJuliaNegadoException.class)
-    public ProblemDetail acessoJuliaNegado(AcessoJuliaNegadoException ex) {
-        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-        problema.setProperty("codigo", CODIGO_JULIA_PLANO);
-        return problema;
     }
 
     @ExceptionHandler(RedacaoSemCorrecaoException.class)

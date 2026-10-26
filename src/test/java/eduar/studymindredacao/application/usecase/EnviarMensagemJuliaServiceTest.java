@@ -2,6 +2,7 @@ package eduar.studymindredacao.application.usecase;
 
 import eduar.studymindredacao.domain.exception.IAOcupadaException;
 import eduar.studymindredacao.domain.exception.IAOcupadaException.Motivo;
+import eduar.studymindredacao.domain.exception.RecursoExclusivoProException;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.julia.ContextoJulia;
 import eduar.studymindredacao.domain.julia.ConversaJulia;
@@ -21,6 +22,7 @@ import eduar.studymindredacao.domain.model.Tema;
 import eduar.studymindredacao.domain.model.enums.OrigemRedacao;
 import eduar.studymindredacao.domain.model.enums.OrigemTema;
 import eduar.studymindredacao.domain.model.enums.RecursoIA;
+import eduar.studymindredacao.domain.model.enums.RecursoPro;
 import eduar.studymindredacao.domain.model.enums.StatusRedacao;
 import eduar.studymindredacao.domain.model.enums.TipoRedacao;
 import eduar.studymindredacao.domain.port.JuliaIAPort;
@@ -53,6 +55,7 @@ class EnviarMensagemJuliaServiceTest {
     private final UsoIAGlobalEmMemoria global = new UsoIAGlobalEmMemoria();
     private final JuliaIAFake julia = new JuliaIAFake();
     private final RelogioAjustavel relogio = RelogioAjustavel.em("2026-10-22T15:00:00Z");
+    private ConsultarPlanoService planos = PlanosDeTeste.pro();
 
     private final UUID alunoId = UUID.randomUUID();
     private Redacao redacao;
@@ -155,6 +158,32 @@ class EnviarMensagemJuliaServiceTest {
 
         assertThat(conversas.todas()).hasSize(1);
         assertThat(conversas.todas().get(0).getMensagens()).hasSize(4);
+    }
+
+    // ---------- plano ----------
+
+    @Test
+    void alunoGratisEBarradoSemContextoSemTravaSemCotaESemIA() {
+        planos = PlanosDeTeste.gratis();
+        service = criarService(POLITICA);
+
+        assertThatThrownBy(() -> service.enviar(alunoId, redacao.id(), "Por que fiquei com 80?"))
+                .isInstanceOfSatisfying(RecursoExclusivoProException.class,
+                        e -> assertThat(e.getRecurso()).isEqualTo(RecursoPro.JULIA));
+
+        assertThat(julia.chamadas()).isEmpty();
+        assertThat(usadasHoje()).isZero();
+        assertThat(global.quantidadeDoDia(RecursoIA.JULIA, hoje())).isZero();
+        assertThat(conversas.buscarAtiva(alunoId, redacao.id())).isEmpty();
+    }
+
+    @Test
+    void alunoGratisComRedacaoDeOutroContinuaRecebendo404() {
+        planos = PlanosDeTeste.gratis();
+        service = criarService(POLITICA);
+
+        assertThatThrownBy(() -> service.enviar(UUID.randomUUID(), redacao.id(), "Por que fiquei com 80?"))
+                .isInstanceOf(RedacaoNaoEncontradaException.class);
     }
 
     // ---------- recusas antes de gastar cota ----------
@@ -411,7 +440,7 @@ class EnviarMensagemJuliaServiceTest {
     private EnviarMensagemJuliaService criarService(PoliticaJulia politica, JuliaIAPort ia,
                                                     LimitadorConcorrenciaIA limitador) {
         return new EnviarMensagemJuliaService(redacoes, new MontadorContextoJulia(avaliacoes, temas), conversas,
-                usos, ia, new ReservadorCotaIA(global, usos), limitador, politica, relogio);
+                usos, ia, new ReservadorCotaIA(global, usos), limitador, politica, planos, relogio);
     }
 
     /** Júlia que para dentro da chamada até o teste soltar: simula uma pergunta em andamento. */

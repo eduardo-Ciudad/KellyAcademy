@@ -1,6 +1,5 @@
 package eduar.studymindredacao.adapter.in.web;
 
-import eduar.studymindredacao.domain.julia.AcessoJuliaNegadoException;
 import eduar.studymindredacao.domain.julia.JuliaIndisponivelException;
 import eduar.studymindredacao.domain.julia.LimiteJuliaExcedidoException;
 import eduar.studymindredacao.domain.julia.PerguntaInvalidaException;
@@ -27,14 +26,6 @@ class GlobalExceptionHandlerJuliaTest {
 
         assertThat(problema.getStatus()).isEqualTo(400);
         assertThat(problema.getDetail()).isEqualTo("A pergunta não pode ficar vazia.");
-    }
-
-    @Test
-    void semPlanoResponde403ComCodigo() {
-        var problema = handler.acessoJuliaNegado(new AcessoJuliaNegadoException());
-
-        assertThat(problema.getStatus()).isEqualTo(403);
-        assertThat(problema.getProperties()).containsEntry("codigo", "JULIA_PLANO");
     }
 
     @Test

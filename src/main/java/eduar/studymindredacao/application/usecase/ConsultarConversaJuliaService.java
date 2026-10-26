@@ -2,6 +2,7 @@ package eduar.studymindredacao.application.usecase;
 
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.julia.ConversaJulia;
+import eduar.studymindredacao.domain.model.enums.RecursoPro;
 import eduar.studymindredacao.domain.port.ConversaJuliaRepositoryPort;
 import eduar.studymindredacao.domain.port.RedacaoRepositoryPort;
 import eduar.studymindredacao.domain.port.UsoIADiarioRepositoryPort;
@@ -23,6 +24,7 @@ public class ConsultarConversaJuliaService {
     private final ConversaJuliaRepositoryPort conversaRepository;
     private final UsoIADiarioRepositoryPort usoRepository;
     private final PoliticaJulia politica;
+    private final ConsultarPlanoService consultarPlano;
     private final Clock clock;
 
     public ConsultarConversaJuliaService(
@@ -30,12 +32,14 @@ public class ConsultarConversaJuliaService {
             ConversaJuliaRepositoryPort conversaRepository,
             UsoIADiarioRepositoryPort usoRepository,
             PoliticaJulia politica,
+            ConsultarPlanoService consultarPlano,
             Clock clock
     ) {
         this.redacaoRepository = redacaoRepository;
         this.conversaRepository = conversaRepository;
         this.usoRepository = usoRepository;
         this.politica = politica;
+        this.consultarPlano = consultarPlano;
         this.clock = clock;
     }
 
@@ -43,6 +47,8 @@ public class ConsultarConversaJuliaService {
         redacaoRepository.buscarPorId(redacaoId)
                 .filter(r -> r.usuarioId().equals(usuarioId))
                 .orElseThrow(() -> new RedacaoNaoEncontradaException(redacaoId));
+        // Grátis não lê nem conversas antigas (de quando era Pro)
+        consultarPlano.exigir(usuarioId, RecursoPro.JULIA);
 
         int restantesHoje = politica.restantesHoje(usoRepository.contarMensagensJulia(usuarioId, LocalDate.now(clock)));
         Optional<ConversaJulia> conversa = conversaRepository.buscarAtiva(usuarioId, redacaoId)

@@ -13,6 +13,7 @@ import eduar.studymindredacao.domain.julia.RespostaJulia;
 import eduar.studymindredacao.domain.julia.TipoLimiteJulia;
 import eduar.studymindredacao.domain.model.Redacao;
 import eduar.studymindredacao.domain.model.enums.RecursoIA;
+import eduar.studymindredacao.domain.model.enums.RecursoPro;
 import eduar.studymindredacao.domain.port.ConversaJuliaRepositoryPort;
 import eduar.studymindredacao.domain.port.JuliaIAPort;
 import eduar.studymindredacao.domain.port.RedacaoRepositoryPort;
@@ -51,6 +52,7 @@ public class EnviarMensagemJuliaService {
     private final ReservadorCotaIA reservador;
     private final LimitadorConcorrenciaIA limitador;
     private final PoliticaJulia politica;
+    private final ConsultarPlanoService consultarPlano;
     private final Clock clock;
 
     public EnviarMensagemJuliaService(
@@ -62,6 +64,7 @@ public class EnviarMensagemJuliaService {
             ReservadorCotaIA reservador,
             LimitadorConcorrenciaIA limitador,
             PoliticaJulia politica,
+            ConsultarPlanoService consultarPlano,
             Clock clock
     ) {
         this.redacaoRepository = redacaoRepository;
@@ -72,6 +75,7 @@ public class EnviarMensagemJuliaService {
         this.reservador = reservador;
         this.limitador = limitador;
         this.politica = politica;
+        this.consultarPlano = consultarPlano;
         this.clock = clock;
     }
 
@@ -79,7 +83,8 @@ public class EnviarMensagemJuliaService {
         Redacao redacao = redacaoRepository.buscarPorId(redacaoId)
                 .filter(r -> r.usuarioId().equals(usuarioId))
                 .orElseThrow(() -> new RedacaoNaoEncontradaException(redacaoId));
-        // TODO plano Pro: quando existir o plano por usuário, lançar AcessoJuliaNegadoException para o plano grátis.
+        // Depois da checagem de dono (redação alheia continua 404) e antes de qualquer custo: contexto, trava, cota e IA
+        consultarPlano.exigir(usuarioId, RecursoPro.JULIA);
         ContextoJulia contexto = montadorContexto.montar(redacao);
 
         LimitesJulia limites = politica.limites();

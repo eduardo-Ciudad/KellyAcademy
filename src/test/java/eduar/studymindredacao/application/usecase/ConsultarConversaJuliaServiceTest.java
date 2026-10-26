@@ -1,11 +1,13 @@
 package eduar.studymindredacao.application.usecase;
 
+import eduar.studymindredacao.domain.exception.RecursoExclusivoProException;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.julia.ConversaJulia;
 import eduar.studymindredacao.domain.julia.MensagemJulia;
 import eduar.studymindredacao.domain.julia.RespostaJulia;
 import eduar.studymindredacao.domain.model.Redacao;
 import eduar.studymindredacao.domain.model.enums.OrigemRedacao;
+import eduar.studymindredacao.domain.model.enums.RecursoPro;
 import eduar.studymindredacao.domain.model.enums.StatusRedacao;
 import eduar.studymindredacao.domain.model.enums.TipoRedacao;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +29,7 @@ class ConsultarConversaJuliaServiceTest {
     private final UsoIADiarioEmMemoria usos = new UsoIADiarioEmMemoria();
     private final RelogioAjustavel relogio = RelogioAjustavel.em("2026-10-22T15:00:00Z");
     private final ConsultarConversaJuliaService service =
-            new ConsultarConversaJuliaService(redacoes, conversas, usos, POLITICA, relogio);
+            new ConsultarConversaJuliaService(redacoes, conversas, usos, POLITICA, PlanosDeTeste.pro(), relogio);
 
     private final UUID alunoId = UUID.randomUUID();
     private Redacao redacao;
@@ -92,6 +94,26 @@ class ConsultarConversaJuliaServiceTest {
                 StatusRedacao.AVALIADA, OffsetDateTime.now(), OrigemRedacao.DIGITADO));
 
         assertThat(service.consultar(alunoId, outra.id()).mensagens()).isEmpty();
+    }
+
+    @Test
+    void alunoGratisNaoLeAConversaNemAsAntigas() {
+        salvarConversaComTrocas(1);
+        var doGratis = new ConsultarConversaJuliaService(redacoes, conversas, usos, POLITICA,
+                PlanosDeTeste.gratis(), relogio);
+
+        assertThatThrownBy(() -> doGratis.consultar(alunoId, redacao.id()))
+                .isInstanceOfSatisfying(RecursoExclusivoProException.class,
+                        e -> assertThat(e.getRecurso()).isEqualTo(RecursoPro.JULIA));
+    }
+
+    @Test
+    void alunoGratisComRedacaoDeOutroContinuaRecebendo404() {
+        var doGratis = new ConsultarConversaJuliaService(redacoes, conversas, usos, POLITICA,
+                PlanosDeTeste.gratis(), relogio);
+
+        assertThatThrownBy(() -> doGratis.consultar(UUID.randomUUID(), redacao.id()))
+                .isInstanceOf(RedacaoNaoEncontradaException.class);
     }
 
     private void salvarConversaComTrocas(int quantidade) {
