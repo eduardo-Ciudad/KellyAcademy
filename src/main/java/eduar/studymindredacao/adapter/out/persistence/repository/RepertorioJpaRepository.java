@@ -17,6 +17,18 @@ import java.util.UUID;
  */
 interface RepertorioJpaRepository extends JpaRepository<RepertorioEntity, UUID> {
 
+    /**
+     * Ids liberados no plano Grátis: um por problema social, o primeiro REP pelo código
+     * (REP antes de EVD e CF) ou, se o problema não tiver REP, o menor código. Só ativos.
+     */
+    String LIBERADOS_NO_GRATIS = """
+            SELECT DISTINCT ON (rpg.problema_id) rg.id
+            FROM repertorio_problemas rpg
+            JOIN repertorios rg ON rg.id = rpg.repertorio_id
+            WHERE rg.ativo
+            ORDER BY rpg.problema_id, (rg.codigo NOT LIKE 'REP-%'), rg.codigo
+            """;
+
     String FILTROS = """
             WHERE r.ativo
               AND (CAST(:tipo AS text) IS NULL OR r.tipo_entidade = CAST(:tipo AS text))
@@ -34,7 +46,8 @@ interface RepertorioJpaRepository extends JpaRepository<RepertorioEntity, UUID> 
               AND (CAST(:busca AS text) IS NULL OR
                     unaccent(lower(r.nome || ' ' || coalesce(r.ideia_central, '') || ' ' || CAST(r.tags AS text)))
                     LIKE '%' || unaccent(lower(CAST(:busca AS text))) || '%' ESCAPE '\\')
-            """;
+              AND (NOT CAST(:somenteGratis AS boolean) OR r.id IN (
+            """ + LIBERADOS_NO_GRATIS + "))";
 
     /** Ids da página, em ordem alfabética do nome (sem acento) e depois pelo código. */
     @Query(nativeQuery = true, value = "SELECT r.id FROM repertorios r " + FILTROS
@@ -44,6 +57,7 @@ interface RepertorioJpaRepository extends JpaRepository<RepertorioEntity, UUID> 
                          @Param("macroeixo") String macroeixo,
                          @Param("problema") String problema,
                          @Param("busca") String busca,
+                         @Param("somenteGratis") boolean somenteGratis,
                          @Param("limite") int limite,
                          @Param("inicio") long inicio);
 
@@ -53,7 +67,13 @@ interface RepertorioJpaRepository extends JpaRepository<RepertorioEntity, UUID> 
                 @Param("funcao") String funcao,
                 @Param("macroeixo") String macroeixo,
                 @Param("problema") String problema,
-                @Param("busca") String busca);
+                @Param("busca") String busca,
+                @Param("somenteGratis") boolean somenteGratis);
+
+    /** Se o repertório ativo com este código está entre os liberados no Grátis. */
+    @Query(nativeQuery = true, value = "SELECT EXISTS (SELECT 1 FROM repertorios r WHERE r.ativo AND r.codigo = :codigo"
+            + " AND r.id IN (" + LIBERADOS_NO_GRATIS + "))")
+    boolean liberadoNoGratis(@Param("codigo") String codigo);
 
     Optional<RepertorioEntity> findByCodigoAndAtivoTrue(String codigo);
 }

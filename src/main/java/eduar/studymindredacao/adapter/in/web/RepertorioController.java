@@ -3,11 +3,13 @@ package eduar.studymindredacao.adapter.in.web;
 import eduar.studymindredacao.adapter.in.web.dto.PaginaResponse;
 import eduar.studymindredacao.adapter.in.web.dto.RepertorioDetalheResponse;
 import eduar.studymindredacao.adapter.in.web.dto.RepertorioResumoResponse;
+import eduar.studymindredacao.adapter.in.web.security.UsuarioAutenticado;
 import eduar.studymindredacao.application.usecase.BuscarRepertorioService;
 import eduar.studymindredacao.application.usecase.ListarRepertoriosService;
 import eduar.studymindredacao.domain.model.FiltroRepertorio;
 import eduar.studymindredacao.domain.model.enums.FuncaoArgumentativa;
 import eduar.studymindredacao.domain.model.enums.TipoEntidade;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +33,7 @@ public class RepertorioController {
      */
     @GetMapping
     public PaginaResponse<RepertorioResumoResponse> listar(
+            @AuthenticationPrincipal UsuarioAutenticado usuario,
             @RequestParam(required = false) String macroeixo,
             @RequestParam(required = false) String problema,
             @RequestParam(required = false) TipoEntidade tipo,
@@ -41,12 +44,13 @@ public class RepertorioController {
     ) {
         int tamanho = size == null ? FiltroRepertorio.TAMANHO_PADRAO : size;
         var filtro = new FiltroRepertorio(macroeixo, problema, tipo, funcao, busca, page, tamanho);
-        return PaginaResponse.de(listarRepertorios.listar(filtro), RepertorioResumoResponse::de);
+        return PaginaResponse.de(listarRepertorios.listar(usuario.id(), filtro).pagina(), RepertorioResumoResponse::de);
     }
 
     /** Detalhe pelo código (REP-025, EVD-001, CF-007); inativo ou inexistente dá 404. */
     @GetMapping("/{codigo}")
-    public RepertorioDetalheResponse buscar(@PathVariable String codigo) {
-        return RepertorioDetalheResponse.de(buscarRepertorio.buscar(codigo));
+    public RepertorioDetalheResponse buscar(@AuthenticationPrincipal UsuarioAutenticado usuario,
+                                            @PathVariable String codigo) {
+        return RepertorioDetalheResponse.de(buscarRepertorio.buscar(usuario.id(), codigo));
     }
 }

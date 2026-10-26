@@ -26,15 +26,16 @@ public class RepertorioRepositoryAdapter implements RepertorioRepositoryPort {
 
     @Override
     @Transactional(readOnly = true)
-    public Pagina<Repertorio> buscar(FiltroRepertorio filtro) {
+    public Pagina<Repertorio> buscar(FiltroRepertorio filtro, boolean somenteLiberadosNoGratis) {
         String tipo = filtro.tipo() == null ? null : filtro.tipo().name();
         String funcao = filtro.funcao() == null ? null : filtro.funcao().name();
         String busca = escaparLike(filtro.busca());
         long inicio = (long) filtro.pagina() * filtro.tamanho();
 
         List<UUID> ids = repertorios.buscarIds(tipo, funcao, filtro.macroeixo(), filtro.problema(), busca,
-                filtro.tamanho(), inicio);
-        long total = repertorios.contar(tipo, funcao, filtro.macroeixo(), filtro.problema(), busca);
+                somenteLiberadosNoGratis, filtro.tamanho(), inicio);
+        long total = repertorios.contar(tipo, funcao, filtro.macroeixo(), filtro.problema(), busca,
+                somenteLiberadosNoGratis);
 
         return new Pagina<>(carregarNaOrdem(ids), filtro.pagina(), filtro.tamanho(), total);
     }
@@ -43,6 +44,22 @@ public class RepertorioRepositoryAdapter implements RepertorioRepositoryPort {
     @Transactional(readOnly = true)
     public Optional<Repertorio> buscarAtivoPorCodigo(String codigo) {
         return repertorios.findByCodigoAndAtivoTrue(codigo).map(RepertorioPersistenceMapper::toDomain);
+    }
+
+    /**
+     * Sobrescreve o default da porta só para ter a transação: o default chamaria o outro método por dentro
+     * (sem passar pelo proxy) e o carregamento das fontes e problemas ficaria fora de uma sessão.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Pagina<Repertorio> buscar(FiltroRepertorio filtro) {
+        return buscar(filtro, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean liberadoNoGratis(String codigo) {
+        return codigo != null && repertorios.liberadoNoGratis(codigo);
     }
 
     /** findAllById não garante ordem: reordena pela lista de ids que veio da consulta paginada. */
