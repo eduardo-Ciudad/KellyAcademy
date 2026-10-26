@@ -1,9 +1,11 @@
 package eduar.studymindredacao.adapter.in.web;
 
 import eduar.studymindredacao.adapter.in.web.dto.EvolucaoResponse;
+import eduar.studymindredacao.adapter.in.web.dto.PlanoResponse;
 import eduar.studymindredacao.adapter.in.web.dto.UsoDiarioResponse;
 import eduar.studymindredacao.adapter.in.web.security.UsuarioAutenticado;
 import eduar.studymindredacao.application.usecase.ConsultarEvolucaoService;
+import eduar.studymindredacao.application.usecase.ConsultarPlanoService;
 import eduar.studymindredacao.application.usecase.ConsultarUsoDiarioService;
 import eduar.studymindredacao.application.usecase.GerenciarMeusTemasService;
 import org.springframework.http.HttpStatus;
@@ -24,20 +26,29 @@ public class UsuarioController {
     private final ConsultarUsoDiarioService consultarUsoDiario;
     private final ConsultarEvolucaoService consultarEvolucao;
     private final GerenciarMeusTemasService gerenciarMeusTemas;
+    private final ConsultarPlanoService consultarPlano;
 
     public UsuarioController(
             ConsultarUsoDiarioService consultarUsoDiario,
             ConsultarEvolucaoService consultarEvolucao,
-            GerenciarMeusTemasService gerenciarMeusTemas
+            GerenciarMeusTemasService gerenciarMeusTemas,
+            ConsultarPlanoService consultarPlano
     ) {
         this.consultarUsoDiario = consultarUsoDiario;
         this.consultarEvolucao = consultarEvolucao;
         this.gerenciarMeusTemas = gerenciarMeusTemas;
+        this.consultarPlano = consultarPlano;
     }
 
     @GetMapping("/me")
     public UsuarioAutenticado me(@AuthenticationPrincipal UsuarioAutenticado usuario) {
         return usuario;
+    }
+
+    /** Plano atual (Grátis ou Pro), limites do dia, recursos liberados e a assinatura vigente. */
+    @GetMapping("/me/plano")
+    public PlanoResponse plano(@AuthenticationPrincipal UsuarioAutenticado usuario) {
+        return PlanoResponse.de(consultarPlano.detalhar(usuario.id()));
     }
 
     /** Saldo de correções de hoje: usadas, limite, restantes e quando o contador zera. */
