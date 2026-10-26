@@ -12,6 +12,7 @@ import eduar.studymindredacao.domain.exception.ImagemNaoReconhecidaException;
 import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.exception.PagamentoIndisponivelException;
+import eduar.studymindredacao.domain.exception.RecursoExclusivoProException;
 import eduar.studymindredacao.domain.exception.RedacaoNaoEncontradaException;
 import eduar.studymindredacao.domain.exception.RepertorioNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.SenhaAtualIncorretaException;
@@ -52,6 +53,7 @@ public class GlobalExceptionHandler {
     static final String CODIGO_SENHA_ATUAL_INCORRETA = "SENHA_ATUAL_INCORRETA";
     static final String CODIGO_ASSINATURA_EXISTENTE = "ASSINATURA_EXISTENTE";
     static final String CODIGO_PAGAMENTO_INDISPONIVEL = "PAGAMENTO_INDISPONIVEL";
+    static final String CODIGO_PLANO_PRO = "PLANO_PRO_NECESSARIO";
     static final String CODIGO_JULIA_PLANO = "JULIA_PLANO";
     static final String CODIGO_JULIA_SEM_CORRECAO = "JULIA_SEM_CORRECAO";
     static final String CODIGO_JULIA_LIMITE_CONVERSA = "JULIA_LIMITE_CONVERSA";
@@ -243,6 +245,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(WebhookInvalidoException.class)
     public ProblemDetail webhookInvalido(WebhookInvalidoException ex) {
         return ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    // ---------- Planos ----------
+
+    // 403 com o recurso barrado: o front mostra o convite para o Pro certo (Júlia, temas possíveis, repertório)
+    @ExceptionHandler(RecursoExclusivoProException.class)
+    public ProblemDetail recursoExclusivoPro(RecursoExclusivoProException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_PLANO_PRO);
+        problema.setProperty("recurso", ex.getRecurso().name());
+        return problema;
     }
 
     // ---------- Júlia ----------
