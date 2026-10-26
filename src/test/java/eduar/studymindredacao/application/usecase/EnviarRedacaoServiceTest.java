@@ -14,6 +14,7 @@ import eduar.studymindredacao.domain.model.SolicitacaoAvaliacao;
 import eduar.studymindredacao.domain.model.Tema;
 import eduar.studymindredacao.domain.model.enums.OrigemRedacao;
 import eduar.studymindredacao.domain.model.enums.OrigemTema;
+import eduar.studymindredacao.domain.model.enums.Plano;
 import eduar.studymindredacao.domain.model.enums.RecursoIA;
 import eduar.studymindredacao.domain.model.enums.StatusRedacao;
 import eduar.studymindredacao.domain.model.enums.TipoRedacao;
@@ -38,9 +39,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class EnviarRedacaoServiceTest {
-    private static final int LIMITE = 3;
+    private static final int LIMITE = 3; // Plano.GRATIS
+    private static final int LIMITE_PRO = 10;
     private static final int LIMITE_GLOBAL = 30;
     // 01:30 UTC do dia 29 = 22:30 do dia 28 em São Paulo
     private static final Clock RELOGIO = Clock.fixed(Instant.parse("2026-09-29T01:30:00Z"), ZoneId.of("America/Sao_Paulo"));
@@ -53,6 +59,7 @@ class EnviarRedacaoServiceTest {
     private final AvaliacaoRepositoryEmMemoria avaliacoes = new AvaliacaoRepositoryEmMemoria();
     private final UsoIADiarioEmMemoria uso = new UsoIADiarioEmMemoria();
     private final UsoIAGlobalEmMemoria global = new UsoIAGlobalEmMemoria();
+    private final ConsultarPlanoService planos = mock(ConsultarPlanoService.class);
     private final List<SolicitacaoAvaliacao> chamadasIA = new ArrayList<>();
     private RuntimeException falhaDaIA;
     private ResultadoAvaliacaoIA respostaDaIA;
@@ -81,6 +88,7 @@ class EnviarRedacaoServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(planos.doUsuario(any())).thenReturn(Plano.GRATIS);
         tema = temas.salvar(new Tema(null, "Democratização do acesso ao cinema no Brasil", null, OrigemTema.ENEM_OFICIAL, (short) 2019, true, null));
         service = novoServico(redacoes, iaFake, LimitadoresDeTeste.padrao(), LIMITE_GLOBAL);
     }
@@ -89,7 +97,7 @@ class EnviarRedacaoServiceTest {
                                              LimitadorConcorrenciaIA limitador, int tetoGlobal) {
         var concluir = new ConcluirAvaliacaoService(avaliacoes, repositorio, uso);
         return new EnviarRedacaoService(temas, repositorio, ia, concluir, new ReservadorCotaIA(global, uso),
-                limitador, RELOGIO, LIMITE, tetoGlobal);
+                limitador, planos, RELOGIO, tetoGlobal);
     }
 
     @Test
@@ -359,6 +367,68 @@ class EnviarRedacaoServiceTest {
             ia.soltar.countDown();
             executor.shutdownNow();
         }
+    }
+
+    // ---------- limite por plano ----------
+
+    private void enviarVezes(int vezes) {
+        for (int i = 0; i < vezes; i++) {
+            service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO);
+        }
+    }
+
+    @Test
+    void gratisEBarradoNaQuartaComOLimiteDoGratisNaExcecao() {
+        enviarVezes(LIMITE);
+
+        assertThatThrownBy(() -> service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                .isInstanceOf(LimiteDiarioAtingidoException.class)
+                .satisfies(e -> assertThat(((LimiteDiarioAtingidoException) e).getLimite()).isEqualTo(LIMITE));
+    }
+
+    @Test
+    void proPassaDaQuartaEEBarradoSoNaDecimaPrimeira() {
+        when(planos.doUsuario(alunoId)).thenReturn(Plano.PRO);
+
+        enviarVezes(LIMITE_PRO);
+
+        assertThat(uso.usoDoDia(alunoId, HOJE_EM_SP).qtdCorrecoes()).isEqualTo(LIMITE_PRO);
+        assertThatThrownBy(() -> service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                .isInstanceOf(LimiteDiarioAtingidoException.class)
+                .satisfies(e -> assertThat(((LimiteDiarioAtingidoException) e).getLimite()).isEqualTo(LIMITE_PRO));
+        assertThat(chamadasIA).hasSize(LIMITE_PRO);
+    }
+
+    @Test
+    void tetoGlobalBarraOProMesmoComVagaSobrando() {
+        when(planos.doUsuario(alunoId)).thenReturn(Plano.PRO);
+        service = novoServico(redacoes, iaFake, LimitadoresDeTeste.padrao(), 2);
+        enviarVezes(2);
+
+        assertThatThrownBy(() -> service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                .isInstanceOf(LimiteGlobalAtingidoException.class);
+        assertThat(uso.usoDoDia(alunoId, HOJE_EM_SP).qtdCorrecoes()).isEqualTo(2);
+    }
+
+    @Test
+    void validacaoFalhaSemConsultarOPlano() {
+        assertThatThrownBy(() -> service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, "  ", OrigemRedacao.DIGITADO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.enviar(alunoId, UUID.randomUUID(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                .isInstanceOf(TemaNaoEncontradoException.class);
+
+        verifyNoInteractions(planos);
+    }
+
+    @Test
+    void falhaAoConsultarOPlanoNaoReservaVaga() {
+        when(planos.doUsuario(alunoId)).thenThrow(new IllegalStateException("banco fora"));
+
+        assertThatThrownBy(() -> service.enviar(alunoId, tema.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(uso.buscarPorUsuarioIdEData(alunoId, HOJE_EM_SP)).isEmpty();
+        assertThat(global.quantidadeDoDia(RecursoIA.CORRECAO, HOJE_EM_SP)).isZero();
+        assertThat(chamadasIA).isEmpty();
     }
 
     /** IA que para dentro da chamada até o teste soltar: simula uma correção em andamento. */

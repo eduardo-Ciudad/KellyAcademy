@@ -22,7 +22,7 @@ import java.util.UUID;
 
 /**
  * Fluxo síncrono de correção:
- * valida texto e tema → permissão de concorrência → reserva a cota (teto global e vaga do aluno)
+ * valida texto e tema → permissão de concorrência → reserva a cota (teto global e vaga do aluno, pelo plano)
  * → salva a redação EM_AVALIACAO → chama a IA → confere pela grade → conclui.
  * Se a IA (ou a conclusão) falhar, a redação vai para ERRO e as duas vagas são devolvidas.
  * A permissão (1 correção por aluno, N no sistema) só é solta depois de tudo gravado (KELLY-SEC-002).
@@ -39,8 +39,8 @@ public class EnviarRedacaoService {
     private final ConcluirAvaliacaoService concluirAvaliacao;
     private final ReservadorCotaIA reservador;
     private final LimitadorConcorrenciaIA limitador;
+    private final ConsultarPlanoService consultarPlano;
     private final Clock clock;
-    private final int limiteDiario;
     private final int limiteGlobal;
 
     public EnviarRedacaoService(
@@ -50,8 +50,8 @@ public class EnviarRedacaoService {
             ConcluirAvaliacaoService concluirAvaliacao,
             ReservadorCotaIA reservador,
             LimitadorConcorrenciaIA limitador,
+            ConsultarPlanoService consultarPlano,
             Clock clock,
-            @Value("${app.limites.correcoes-diarias-free}") int limiteDiario,
             @Value("${app.limites.correcoes-diarias-globais}") int limiteGlobal
     ) {
         this.temaRepository = temaRepository;
@@ -60,8 +60,8 @@ public class EnviarRedacaoService {
         this.concluirAvaliacao = concluirAvaliacao;
         this.reservador = reservador;
         this.limitador = limitador;
+        this.consultarPlano = consultarPlano;
         this.clock = clock;
-        this.limiteDiario = limiteDiario;
         this.limiteGlobal = limiteGlobal;
     }
 
@@ -73,7 +73,9 @@ public class EnviarRedacaoService {
 
         try (var permissao = limitador.adquirir(usuarioId, RecursoIA.CORRECAO)) {
             LocalDate hoje = LocalDate.now(clock);
-            ReservaCota reserva = reservador.reservar(usuarioId, RecursoIA.CORRECAO, hoje, limiteDiario, limiteGlobal);
+            // Antes da reserva: se a consulta do plano falhar, não fica vaga presa
+            int limiteAluno = consultarPlano.doUsuario(usuarioId).limiteDiario(RecursoIA.CORRECAO);
+            ReservaCota reserva = reservador.reservar(usuarioId, RecursoIA.CORRECAO, hoje, limiteAluno, limiteGlobal);
 
             Redacao redacao;
             try {
