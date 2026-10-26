@@ -19,9 +19,7 @@ class ValidadorConfiguracao {
     private static final Logger log = LoggerFactory.getLogger(ValidadorConfiguracao.class);
 
     ValidadorConfiguracao(
-            @Value("${app.limites.correcoes-diarias-free}") String correcoesDiarias,
             @Value("${app.limites.correcoes-diarias-globais}") String correcoesGlobais,
-            @Value("${app.limites.transcricoes-diarias-free}") String transcricoesDiarias,
             @Value("${app.limites.transcricoes-diarias-globais}") String transcricoesGlobais,
             @Value("${gemini.modelo}") String modelo,
             @Value("${gemini.transcricao.modelo}") String modeloTranscricao,
@@ -36,9 +34,7 @@ class ValidadorConfiguracao {
             @Value("${transcricao.gemini.api-key}") String chaveTranscricao
     ) {
         var config = new ConfiguracaoInicial(
-                inteiro(correcoesDiarias),
                 inteiro(correcoesGlobais),
-                inteiro(transcricoesDiarias),
                 inteiro(transcricoesGlobais),
                 modelo,
                 modeloTranscricao,

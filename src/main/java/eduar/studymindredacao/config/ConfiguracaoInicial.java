@@ -5,6 +5,8 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import eduar.studymindredacao.domain.model.enums.Plano;
+import eduar.studymindredacao.domain.model.enums.RecursoIA;
 
 /**
  * Configuração lida na subida da aplicação, com as regras que impedem a API de subir
@@ -12,9 +14,7 @@ import java.util.Set;
  * O {@link #toString()} nunca mostra usuário nem senha do e-mail.
  */
 record ConfiguracaoInicial(
-        int correcoesDiarias,
         int correcoesGlobais,
-        int transcricoesDiarias,
         int transcricoesGlobais,
         String modelo,
         String modeloTranscricao,
@@ -31,16 +31,11 @@ record ConfiguracaoInicial(
     List<String> validar() {
         List<String> erros = new ArrayList<>();
 
-        positivo(correcoesDiarias, "LIMITE_CORRECOES_DIARIAS", erros);
         positivo(correcoesGlobais, "LIMITE_CORRECOES_GLOBAL", erros);
-        positivo(transcricoesDiarias, "LIMITE_TRANSCRICOES_DIARIAS", erros);
         positivo(transcricoesGlobais, "LIMITE_TRANSCRICOES_GLOBAL", erros);
-        if (correcoesDiarias > correcoesGlobais) {
-            erros.add("LIMITE_CORRECOES_DIARIAS não pode ser maior que LIMITE_CORRECOES_GLOBAL");
-        }
-        if (transcricoesDiarias > transcricoesGlobais) {
-            erros.add("LIMITE_TRANSCRICOES_DIARIAS não pode ser maior que LIMITE_TRANSCRICOES_GLOBAL");
-        }
+        tetoCobreOPro(correcoesGlobais, RecursoIA.CORRECAO, "LIMITE_CORRECOES_GLOBAL", erros);
+        tetoCobreOPro(transcricoesGlobais, RecursoIA.TRANSCRICAO, "LIMITE_TRANSCRICOES_GLOBAL", erros);
+
 
         obrigatorio(modelo, "gemini.modelo", erros);
         if (vazio(modeloTranscricao)) {
@@ -57,13 +52,14 @@ record ConfiguracaoInicial(
         return erros;
     }
 
-    /** Resumo para o log, só com valores não sensíveis. */
     String resumoSeguro() {
         String email = emailHabilitado
                 ? "ligado (" + mailHost + ":" + mailPorta + ", links para " + frontendUrl + ")"
                 : "desligado";
-        return "correções " + correcoesDiarias + "/dia por aluno (teto " + correcoesGlobais + "), "
-                + "transcrições " + transcricoesDiarias + "/dia por aluno (teto " + transcricoesGlobais + "), "
+        return "correções: Grátis " + Plano.GRATIS.limiteDiario(RecursoIA.CORRECAO)
+                + " e Pro " + Plano.PRO.limiteDiario(RecursoIA.CORRECAO) + " por aluno (teto " + correcoesGlobais + "), "
+                + "transcrições: Grátis " + Plano.GRATIS.limiteDiario(RecursoIA.TRANSCRICAO)
+                + " e Pro " + Plano.PRO.limiteDiario(RecursoIA.TRANSCRICAO) + " por aluno (teto " + transcricoesGlobais + "), "
                 + "modelo " + modelo + ", modelo da transcrição " + modeloTranscricao + ", "
                 + "e-mail " + email;
     }
@@ -132,4 +128,15 @@ record ConfiguracaoInicial(
     private static boolean vazio(String valor) {
         return valor == null || valor.isBlank();
     }
+
+
+    /** Um teto abaixo do limite do Pro barraria um único aluno Pro antes da cota dele acabar. */
+    private static void tetoCobreOPro(int teto, RecursoIA recurso, String nome, List<String> erros) {
+        int limitePro = Plano.PRO.limiteDiario(recurso);
+        if (teto > 0 && teto < limitePro) {
+            erros.add(nome + " deve ser pelo menos " + limitePro + " (limite diário do plano Pro)");
+        }
+    }
+
+
 }

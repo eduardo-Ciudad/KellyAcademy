@@ -45,7 +45,6 @@ jobs:
       CORS_ORIGENS: http://localhost:5173
       CADASTRO_ABERTO: "true"
       CADASTRO_EMAILS_PERMITIDOS: ""
-      LIMITE_CORRECOES_DIARIAS: 3
       LIMITE_CORRECOES_GLOBAL: 30
       # server.forward-headers-strategy é enum: NONE | NATIVE | FRAMEWORK
       FORWARD_HEADERS: NONE
