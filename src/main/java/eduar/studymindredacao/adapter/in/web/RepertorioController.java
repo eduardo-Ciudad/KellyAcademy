@@ -1,8 +1,7 @@
 package eduar.studymindredacao.adapter.in.web;
 
-import eduar.studymindredacao.adapter.in.web.dto.PaginaResponse;
 import eduar.studymindredacao.adapter.in.web.dto.RepertorioDetalheResponse;
-import eduar.studymindredacao.adapter.in.web.dto.RepertorioResumoResponse;
+import eduar.studymindredacao.adapter.in.web.dto.RepertorioPaginaResponse;
 import eduar.studymindredacao.adapter.in.web.security.UsuarioAutenticado;
 import eduar.studymindredacao.application.usecase.BuscarRepertorioService;
 import eduar.studymindredacao.application.usecase.ListarRepertoriosService;
@@ -30,9 +29,10 @@ public class RepertorioController {
     /**
      * Listagem paginada, em ordem alfabética. Todos os filtros são opcionais e combináveis.
      * Valores inválidos (size fora de 1–50, q com mais de 100 caracteres, slug malformado, enum desconhecido) dão 400.
+     * No Grátis vem só um repertório por problema social, com limitadoAoPlano = true.
      */
     @GetMapping
-    public PaginaResponse<RepertorioResumoResponse> listar(
+    public RepertorioPaginaResponse listar(
             @AuthenticationPrincipal UsuarioAutenticado usuario,
             @RequestParam(required = false) String macroeixo,
             @RequestParam(required = false) String problema,
@@ -44,10 +44,10 @@ public class RepertorioController {
     ) {
         int tamanho = size == null ? FiltroRepertorio.TAMANHO_PADRAO : size;
         var filtro = new FiltroRepertorio(macroeixo, problema, tipo, funcao, busca, page, tamanho);
-        return PaginaResponse.de(listarRepertorios.listar(usuario.id(), filtro).pagina(), RepertorioResumoResponse::de);
+        return RepertorioPaginaResponse.de(listarRepertorios.listar(usuario.id(), filtro));
     }
 
-    /** Detalhe pelo código (REP-025, EVD-001, CF-007); inativo ou inexistente dá 404. */
+    /** Detalhe pelo código (REP-025, EVD-001, CF-007); inativo ou inexistente dá 404; não liberado no Grátis dá 403. */
     @GetMapping("/{codigo}")
     public RepertorioDetalheResponse buscar(@AuthenticationPrincipal UsuarioAutenticado usuario,
                                             @PathVariable String codigo) {
