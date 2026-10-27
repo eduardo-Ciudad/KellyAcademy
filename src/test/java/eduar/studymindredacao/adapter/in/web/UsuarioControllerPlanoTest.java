@@ -9,6 +9,7 @@ import eduar.studymindredacao.application.usecase.GerenciarMeusTemasService;
 import eduar.studymindredacao.application.usecase.PlanoDoUsuario;
 import eduar.studymindredacao.application.usecase.ValidarSessaoService;
 import eduar.studymindredacao.domain.model.Assinatura;
+import eduar.studymindredacao.domain.model.ConcessaoPro;
 import eduar.studymindredacao.domain.model.DadosToken;
 import eduar.studymindredacao.domain.model.enums.CicloAssinatura;
 import eduar.studymindredacao.domain.model.enums.Role;
@@ -26,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
@@ -115,5 +117,23 @@ class UsuarioControllerPlanoTest {
                 .andExpect(jsonPath("$.assinatura.ciclo").value("MENSAL"))
                 .andExpect(jsonPath("$.assinatura.cancelarNoFimDoPeriodo").value(false))
                 .andExpect(content().string(not(containsString("sub_segredo"))));
+    }
+
+    @Test
+    void alunoProPorConcessaoRecebeOrigemEFimSemMotivoNemQuemConcedeu() throws Exception {
+        var agora = OffsetDateTime.of(2026, 10, 27, 17, 0, 0, 0, ZoneOffset.ofHours(-3));
+        UUID admin = UUID.randomUUID();
+        var concessao = ConcessaoPro.conceder(usuarioId, admin, "Motivo interno do admin", 30, agora,
+                ZoneId.of("America/Sao_Paulo"));
+        when(consultarPlano.detalhar(usuarioId)).thenReturn(PlanoDoUsuario.proPorConcessao(concessao));
+
+        mvc.perform(get("/usuarios/me/plano").header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.plano").value("PRO"))
+                .andExpect(jsonPath("$.origem").value("CONCESSAO"))
+                .andExpect(jsonPath("$.concessao.fim").exists())
+                .andExpect(jsonPath("$.assinatura").doesNotExist())
+                .andExpect(content().string(not(containsString("Motivo interno do admin"))))
+                .andExpect(content().string(not(containsString(admin.toString()))));
     }
 }

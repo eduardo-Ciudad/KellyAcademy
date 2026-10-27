@@ -4,11 +4,13 @@ import eduar.studymindredacao.domain.model.Assinatura;
 import eduar.studymindredacao.domain.model.enums.CicloAssinatura;
 import eduar.studymindredacao.domain.model.enums.StatusAssinatura;
 import eduar.studymindredacao.domain.port.AssinaturaRepositoryPort;
+import eduar.studymindredacao.domain.port.ConcessaoProRepositoryPort;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -30,7 +32,7 @@ final class PlanosDeTeste {
     static ConsultarPlanoService gratis() {
         var assinaturas = mock(AssinaturaRepositoryPort.class);
         when(assinaturas.listarPorUsuario(any())).thenReturn(List.of());
-        return new ConsultarPlanoService(assinaturas, Clock.systemUTC());
+        return new ConsultarPlanoService(assinaturas, semConcessoes(), Clock.systemUTC());
     }
 
     /** Todo aluno com uma assinatura ativa até 2099: plano Pro. */
@@ -40,6 +42,12 @@ final class PlanosDeTeste {
                 Assinatura.nova(chamada.getArgument(0, UUID.class), "sub_teste", CicloAssinatura.MENSAL,
                         StatusAssinatura.ACTIVE, FIM_DISTANTE, false, INICIO)
         ));
-        return new ConsultarPlanoService(assinaturas, Clock.systemUTC());
+        return new ConsultarPlanoService(assinaturas, semConcessoes(), Clock.systemUTC());
+    }
+
+    private static ConcessaoProRepositoryPort semConcessoes() {
+        var concessoes = mock(ConcessaoProRepositoryPort.class);
+        when(concessoes.buscarAberta(any())).thenReturn(Optional.empty());
+        return concessoes;
     }
 }

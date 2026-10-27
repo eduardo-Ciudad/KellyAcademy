@@ -2,11 +2,14 @@ package eduar.studymindredacao.application.usecase;
 
 import eduar.studymindredacao.domain.exception.RecursoExclusivoProException;
 import eduar.studymindredacao.domain.model.Assinatura;
+import eduar.studymindredacao.domain.model.ConcessaoPro;
 import eduar.studymindredacao.domain.model.enums.CicloAssinatura;
+import eduar.studymindredacao.domain.model.enums.OrigemPlano;
 import eduar.studymindredacao.domain.model.enums.Plano;
 import eduar.studymindredacao.domain.model.enums.RecursoPro;
 import eduar.studymindredacao.domain.model.enums.StatusAssinatura;
 import eduar.studymindredacao.domain.port.AssinaturaRepositoryPort;
+import eduar.studymindredacao.domain.port.ConcessaoProRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,11 +23,13 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,13 +39,15 @@ class ConsultarPlanoServiceTest {
 
     @Mock
     private AssinaturaRepositoryPort assinaturas;
+    @Mock
+    private ConcessaoProRepositoryPort concessoes;
 
     private ConsultarPlanoService service;
 
     @BeforeEach
     void criar() {
         Clock clock = Clock.fixed(AGORA.toInstant(), ZoneId.of("America/Sao_Paulo"));
-        service = new ConsultarPlanoService(assinaturas, clock);
+        service = new ConsultarPlanoService(assinaturas, concessoes, clock);
     }
 
     private static Assinatura assinatura(String subId, StatusAssinatura status, OffsetDateTime fim,
@@ -200,5 +207,83 @@ class ConsultarPlanoServiceTest {
     @Test
     void detalharExigeId() {
         assertThatThrownBy(() -> service.detalhar(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    // ---------- concessão manual ----------
+
+    private static final UUID ADMIN = UUID.randomUUID();
+    private static final ZoneId SAO_PAULO = ZoneId.of("America/Sao_Paulo");
+
+    private static ConcessaoPro concessao(OffsetDateTime concedidaEm, int dias) {
+        return ConcessaoPro.conceder(ALUNO, ADMIN, "Testador do piloto", dias, concedidaEm, SAO_PAULO);
+    }
+
+    @Test
+    void semAssinaturaComConcessaoVigenteEProPorConcessao() {
+        var vigente = concessao(AGORA.minusDays(1), 30);
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of());
+        when(concessoes.buscarAberta(ALUNO)).thenReturn(Optional.of(vigente));
+
+        var detalhe = service.detalhar(ALUNO);
+
+        assertThat(detalhe.plano()).isEqualTo(Plano.PRO);
+        assertThat(detalhe.origem()).isEqualTo(OrigemPlano.CONCESSAO);
+        assertThat(detalhe.concessaoVigente()).isSameAs(vigente);
+        assertThat(detalhe.assinaturaVigente()).isNull();
+    }
+
+    @Test
+    void concessaoVencidaENaoRevogadaEGratis() {
+        var vencida = concessao(AGORA.minusDays(40), 30);
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of());
+        when(concessoes.buscarAberta(ALUNO)).thenReturn(Optional.of(vencida));
+
+        assertThat(service.detalhar(ALUNO)).isEqualTo(PlanoDoUsuario.gratis());
+    }
+
+    @Test
+    void concessaoQueAindaNaoComecouEGratis() {
+        var futura = concessao(AGORA.plusHours(1), 30);
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of());
+        when(concessoes.buscarAberta(ALUNO)).thenReturn(Optional.of(futura));
+
+        assertThat(service.doUsuario(ALUNO)).isEqualTo(Plano.GRATIS);
+    }
+
+    @Test
+    void semAssinaturaESemConcessaoEGratis() {
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of());
+        when(concessoes.buscarAberta(ALUNO)).thenReturn(Optional.empty());
+
+        assertThat(service.detalhar(ALUNO)).isEqualTo(PlanoDoUsuario.gratis());
+    }
+
+    @Test
+    void assinaturaVigenteTemPrioridadeENemConsultaConcessoes() {
+        var ativa = vigente(StatusAssinatura.ACTIVE);
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of(ativa));
+
+        var detalhe = service.detalhar(ALUNO);
+
+        assertThat(detalhe.origem()).isEqualTo(OrigemPlano.ASSINATURA);
+        assertThat(detalhe.assinaturaVigente()).isSameAs(ativa);
+        verifyNoInteractions(concessoes);
+    }
+
+    @Test
+    void assinaturaAtrasadaComConcessaoVigenteEProPelaConcessao() {
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of(vigente(StatusAssinatura.PAST_DUE)));
+        when(concessoes.buscarAberta(ALUNO)).thenReturn(Optional.of(concessao(AGORA.minusDays(1), 30)));
+
+        assertThat(service.detalhar(ALUNO).origem()).isEqualTo(OrigemPlano.CONCESSAO);
+    }
+
+    @ParameterizedTest
+    @EnumSource(RecursoPro.class)
+    void exigirComConcessaoVigentePassa(RecursoPro recurso) {
+        when(assinaturas.listarPorUsuario(ALUNO)).thenReturn(List.of());
+        when(concessoes.buscarAberta(ALUNO)).thenReturn(Optional.of(concessao(AGORA.minusDays(1), 30)));
+
+        assertThatCode(() -> service.exigir(ALUNO, recurso)).doesNotThrowAnyException();
     }
 }
