@@ -1,6 +1,12 @@
 package eduar.studymindredacao.adapter.out.persistence.repository;
 
+import eduar.studymindredacao.domain.model.Pagina;
+import eduar.studymindredacao.domain.model.admin.FiltroUsuariosAdmin;
+import eduar.studymindredacao.domain.model.admin.UsuarioDetalheAdmin.AtividadeJulia;
+import eduar.studymindredacao.domain.model.admin.UsuarioDetalheAdmin.RedacaoAdmin;
 import eduar.studymindredacao.domain.model.admin.UsuarioResumoAdmin;
+import eduar.studymindredacao.domain.model.enums.OrigemRedacao;
+import eduar.studymindredacao.domain.model.enums.StatusRedacao;
 import eduar.studymindredacao.domain.model.enums.Plano;
 import eduar.studymindredacao.domain.model.enums.RecursoIA;
 import eduar.studymindredacao.domain.model.enums.Role;
@@ -19,6 +25,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -204,6 +211,11 @@ public class PainelAdminQueryAdapter implements PainelAdminQueryPort {
                   FROM avaliacoes
                  WHERE avaliado_em >= :de AND avaliado_em < :ate
                 """), de, ate).getSingleResult();
+        return mediasDasColunas(colunas);
+    }
+
+    /** Colunas avg(nota_c1..c5) viram o mapa competência → média; competência sem dado fica de fora. */
+    private static Map<Integer, Double> mediasDasColunas(Object[] colunas) {
         var medias = new LinkedHashMap<Integer, Double>();
         for (int i = 0; i < colunas.length; i++) {
             Double media = decimal(colunas[i]);
@@ -247,6 +259,163 @@ public class PainelAdminQueryAdapter implements PainelAdminQueryPort {
     public Optional<OffsetDateTime> ultimoEventoStripe() {
         return Optional.ofNullable(dataHora(
                 em.createNativeQuery("SELECT max(processado_em) FROM eventos_stripe").getSingleResult()));
+    }
+
+    // ---------- usuários ----------
+
+    @Override
+    public Pagina<UsuarioResumoAdmin> listarUsuarios(FiltroUsuariosAdmin filtro, OffsetDateTime agora,
+                                                     Set<StatusAssinatura> statusComAcesso) {
+        Objects.requireNonNull(filtro, "filtro é obrigatório");
+        String where = whereDosFiltros(filtro);
+
+        Query consulta = em.createNativeQuery(SELECT_RESUMO + where
+                + " ORDER BY u.criado_em DESC, u.id LIMIT :limite OFFSET :inicio");
+        pro(consulta, agora, statusComAcesso);
+        parametrosDosFiltros(consulta, filtro);
+        List<?> linhas = consulta
+                .setParameter("limite", filtro.tamanho())
+                .setParameter("inicio", filtro.inicio())
+                .getResultList();
+
+        Query contagem = em.createNativeQuery("SELECT count(*) FROM usuarios u" + where);
+        if (filtro.plano() != null) {
+            // :agora e :statusComAcesso só existem no count quando o filtro de plano está ativo
+            pro(contagem, agora, statusComAcesso);
+        }
+        parametrosDosFiltros(contagem, filtro);
+
+        List<UsuarioResumoAdmin> itens = linhas.stream().map(linha -> paraResumo((Object[]) linha)).toList();
+        return new Pagina<>(itens, filtro.pagina(), filtro.tamanho(), longo(contagem.getSingleResult()));
+    }
+
+    /**
+     * Só entra no SQL o filtro que veio preenchido. O texto da busca vai por parâmetro (nunca concatenado),
+     * com % e _ escapados para não virarem curinga.
+     */
+    static String whereDosFiltros(FiltroUsuariosAdmin filtro) {
+        var condicoes = new ArrayList<String>();
+        if (filtro.busca() != null) {
+            condicoes.add("unaccent(lower(u.nome || ' ' || u.email)) "
+                    + "LIKE '%' || unaccent(lower(CAST(:busca AS text))) || '%' ESCAPE '\\'");
+        }
+        if (filtro.plano() != null) {
+            condicoes.add((filtro.plano() == Plano.PRO ? "" : "NOT ") + EXPRESSAO_PRO);
+        }
+        if (filtro.emailVerificado() != null) {
+            condicoes.add(filtro.emailVerificado()
+                    ? "u.email_verificado_em IS NOT NULL"
+                    : "u.email_verificado_em IS NULL");
+        }
+        return condicoes.isEmpty() ? "" : " WHERE " + String.join(" AND ", condicoes);
+    }
+
+    private static void parametrosDosFiltros(Query query, FiltroUsuariosAdmin filtro) {
+        if (filtro.busca() != null) {
+            query.setParameter("busca", RepertorioRepositoryAdapter.escaparLike(filtro.busca()));
+        }
+    }
+
+    @Override
+    public Optional<UsuarioResumoAdmin> buscarResumo(UUID usuarioId, OffsetDateTime agora,
+                                                     Set<StatusAssinatura> statusComAcesso) {
+        requerer(usuarioId, "usuarioId");
+        Query query = em.createNativeQuery(SELECT_RESUMO + " WHERE u.id = :id");
+        List<?> linhas = pro(query, agora, statusComAcesso)
+                .setParameter("id", usuarioId)
+                .getResultList();
+        return linhas.stream().findFirst().map(linha -> paraResumo((Object[]) linha));
+    }
+
+    @Override
+    public Optional<Integer> melhorNota(UUID usuarioId) {
+        Object maior = em.createNativeQuery("""
+                        SELECT max(av.nota_total)
+                          FROM avaliacoes av
+                          JOIN redacoes r ON r.id = av.redacao_id
+                         WHERE r.usuario_id = :id
+                        """)
+                .setParameter("id", requerer(usuarioId, "usuarioId"))
+                .getSingleResult();
+        return maior == null ? Optional.empty() : Optional.of((int) longo(maior));
+    }
+
+    @Override
+    public Map<Integer, Double> mediasPorCompetenciaDoUsuario(UUID usuarioId) {
+        Object[] colunas = (Object[]) em.createNativeQuery("""
+                        SELECT avg(av.nota_c1), avg(av.nota_c2), avg(av.nota_c3), avg(av.nota_c4), avg(av.nota_c5)
+                          FROM avaliacoes av
+                          JOIN redacoes r ON r.id = av.redacao_id
+                         WHERE r.usuario_id = :id
+                        """)
+                .setParameter("id", requerer(usuarioId, "usuarioId"))
+                .getSingleResult();
+        return mediasDasColunas(colunas);
+    }
+
+    /** Sem linha no dia, o mapa vem vazio (o aluno não usou nada). */
+    @Override
+    public Map<RecursoIA, Integer> usoDoUsuarioNoDia(UUID usuarioId, LocalDate dia) {
+        List<?> linhas = em.createNativeQuery("""
+                        SELECT qtd_correcoes, qtd_transcricoes, qtd_mensagens_julia
+                          FROM uso_ia_diario
+                         WHERE usuario_id = :id AND data = :dia
+                        """)
+                .setParameter("id", requerer(usuarioId, "usuarioId"))
+                .setParameter("dia", requerer(dia, "dia"))
+                .getResultList();
+        var uso = new EnumMap<RecursoIA, Integer>(RecursoIA.class);
+        if (!linhas.isEmpty()) {
+            Object[] colunas = (Object[]) linhas.get(0);
+            uso.put(RecursoIA.CORRECAO, (int) longo(colunas[0]));
+            uso.put(RecursoIA.TRANSCRICAO, (int) longo(colunas[1]));
+            uso.put(RecursoIA.JULIA, (int) longo(colunas[2]));
+        }
+        return uso;
+    }
+
+    /** Mensagens = perguntas do aluno (papel USUARIO); as respostas da Júlia não entram na conta. */
+    @Override
+    public AtividadeJulia atividadeJulia(UUID usuarioId) {
+        Object[] colunas = (Object[]) em.createNativeQuery("""
+                        SELECT (SELECT count(*) FROM conversas_julia WHERE usuario_id = :id),
+                               (SELECT count(*)
+                                  FROM mensagens_julia m
+                                  JOIN conversas_julia c ON c.id = m.conversa_id
+                                 WHERE c.usuario_id = :id AND m.papel = 'USUARIO')
+                        """)
+                .setParameter("id", requerer(usuarioId, "usuarioId"))
+                .getSingleResult();
+        return new AtividadeJulia(longo(colunas[0]), longo(colunas[1]));
+    }
+
+    @Override
+    public List<RedacaoAdmin> ultimasRedacoes(UUID usuarioId, int limite) {
+        if (limite < 1) {
+            throw new IllegalArgumentException("limite deve ser pelo menos 1");
+        }
+        List<?> linhas = em.createNativeQuery("""
+                        SELECT r.id, r.enviada_em, t.titulo, r.origem, r.status, av.nota_total
+                          FROM redacoes r
+                          JOIN temas t ON t.id = r.tema_id
+                          LEFT JOIN avaliacoes av ON av.redacao_id = r.id
+                         WHERE r.usuario_id = :id
+                         ORDER BY r.enviada_em DESC, r.id
+                         LIMIT :limite
+                        """)
+                .setParameter("id", requerer(usuarioId, "usuarioId"))
+                .setParameter("limite", limite)
+                .getResultList();
+        return linhas.stream().map(linha -> {
+            Object[] c = (Object[]) linha;
+            return new RedacaoAdmin(
+                    (UUID) c[0],
+                    dataHora(c[1]),
+                    (String) c[2],
+                    OrigemRedacao.valueOf((String) c[3]),
+                    StatusRedacao.valueOf((String) c[4]),
+                    c[5] == null ? null : (int) longo(c[5]));
+        }).toList();
     }
 
     // ---------- apoio ----------

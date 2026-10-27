@@ -1,5 +1,9 @@
 package eduar.studymindredacao.domain.port;
 
+import eduar.studymindredacao.domain.model.Pagina;
+import eduar.studymindredacao.domain.model.admin.FiltroUsuariosAdmin;
+import eduar.studymindredacao.domain.model.admin.UsuarioDetalheAdmin.AtividadeJulia;
+import eduar.studymindredacao.domain.model.admin.UsuarioDetalheAdmin.RedacaoAdmin;
 import eduar.studymindredacao.domain.model.admin.UsuarioResumoAdmin;
 import eduar.studymindredacao.domain.model.enums.RecursoIA;
 import eduar.studymindredacao.domain.model.enums.StatusAssinatura;
@@ -11,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Consultas só de leitura do painel admin. Fica separado dos ports de cada agregado porque são números de relatório
@@ -66,4 +71,28 @@ public interface PainelAdminQueryPort {
     long contarNaoVerificadasCriadasAntesDe(OffsetDateTime limite);
 
     Optional<OffsetDateTime> ultimoEventoStripe();
+
+    // ---------- usuários ----------
+
+    /** Listagem com filtros, dos cadastros mais novos para os mais antigos. */
+    Pagina<UsuarioResumoAdmin> listarUsuarios(FiltroUsuariosAdmin filtro, OffsetDateTime agora,
+                                              Set<StatusAssinatura> statusComAcesso);
+
+    Optional<UsuarioResumoAdmin> buscarResumo(UUID usuarioId, OffsetDateTime agora,
+                                              Set<StatusAssinatura> statusComAcesso);
+
+    /** Maior nota total entre as correções do aluno; vazio sem correção. */
+    Optional<Integer> melhorNota(UUID usuarioId);
+
+    /** Média de cada competência (chaves 1 a 5) em todas as correções do aluno; vazio sem correção. */
+    Map<Integer, Double> mediasPorCompetenciaDoUsuario(UUID usuarioId);
+
+    /** Uso do aluno no dia (correções, transcrições, perguntas à Júlia); sem uso no dia, o mapa vem vazio. */
+    Map<RecursoIA, Integer> usoDoUsuarioNoDia(UUID usuarioId, LocalDate dia);
+
+    /** Conversas com a Júlia e perguntas feitas pelo aluno (as respostas dela não contam). */
+    AtividadeJulia atividadeJulia(UUID usuarioId);
+
+    /** As últimas redações do aluno com tema e nota, da mais recente para a mais antiga. */
+    List<RedacaoAdmin> ultimasRedacoes(UUID usuarioId, int limite);
 }
