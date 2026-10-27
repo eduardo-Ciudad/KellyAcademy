@@ -9,7 +9,12 @@ import eduar.studymindredacao.domain.exception.EmailJaCadastradoException;
 import eduar.studymindredacao.domain.exception.EmailNaoVerificadoException;
 import eduar.studymindredacao.domain.exception.ImagemInvalidaException;
 import eduar.studymindredacao.domain.exception.ImagemNaoReconhecidaException;
+import eduar.studymindredacao.domain.exception.AcaoAdminConflitoException;
+import eduar.studymindredacao.domain.exception.AcessoAdminNegadoException;
+import eduar.studymindredacao.domain.exception.ConcessaoProConflitoException;
 import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
+import eduar.studymindredacao.domain.exception.ReenvioMuitoRecenteException;
+import eduar.studymindredacao.domain.exception.UsuarioNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
 import eduar.studymindredacao.domain.exception.PagamentoIndisponivelException;
 import eduar.studymindredacao.domain.exception.RecursoExclusivoProException;
@@ -119,10 +124,32 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             TemaNaoEncontradoException.class,
             RedacaoNaoEncontradaException.class,
-            RepertorioNaoEncontradoException.class
+            RepertorioNaoEncontradoException.class,
+            UsuarioNaoEncontradoException.class
     })
     public ProblemDetail naoEncontrado(RuntimeException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    // ---------- painel admin ----------
+
+    // Role do JWT dizia ADMIN, mas no banco a conta não é mais admin
+    @ExceptionHandler(AcessoAdminNegadoException.class)
+    public ProblemDetail acessoAdminNegado(AcessoAdminNegadoException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler({ConcessaoProConflitoException.class, AcaoAdminConflitoException.class})
+    public ProblemDetail conflitoAdmin(RuntimeException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(ReenvioMuitoRecenteException.class)
+    public ResponseEntity<ProblemDetail> reenvioMuitoRecente(ReenvioMuitoRecenteException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getSegundosParaTentar()))
+                .body(problema);
     }
 
     // 429 + Retry-After com os segundos até a meia-noite (no fuso da aplicação), quando o limite zera
