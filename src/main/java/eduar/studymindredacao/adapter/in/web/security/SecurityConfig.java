@@ -42,6 +42,8 @@ public class SecurityConfig {
                         // Sem JWT: o Stripe se identifica pelo header Stripe-Signature (HMAC), conferido no caso de uso
                         .requestMatchers(HttpMethod.POST, "/webhooks/stripe").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Painel admin: a role vem do JWT; as ações sensíveis conferem de novo a role no banco
+                        .requestMatchers("/admin", "/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(erro -> erro
