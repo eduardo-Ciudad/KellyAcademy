@@ -52,6 +52,14 @@ public class TokenUsuarioRepositoryAdapter implements TokenUsuarioRepositoryPort
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<OffsetDateTime> ultimaEmissao(UUID usuarioId, TipoTokenUsuario tipo) {
+        Objects.requireNonNull(usuarioId, "usuarioId é obrigatório");
+        Objects.requireNonNull(tipo, "tipo é obrigatório");
+        return repository.ultimaEmissao(usuarioId, tipo);
+    }
+
+    @Override
     @Transactional
     public int excluirAntigos(OffsetDateTime corte) {
         Objects.requireNonNull(corte, "corte é obrigatório");

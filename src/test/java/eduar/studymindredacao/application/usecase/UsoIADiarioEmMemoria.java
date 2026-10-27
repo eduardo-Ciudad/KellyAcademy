@@ -106,4 +106,21 @@ class UsoIADiarioEmMemoria implements UsoIADiarioRepositoryPort {
         return buscarPorUsuarioIdEData(usuarioId, data)
                 .orElse(new UsoIADiario(UUID.randomUUID(), usuarioId, data, 0, 0, 0, 0, 0));
     }
+
+    /** Igual ao UPDATE do adapter: zera os 3 contadores do dia, mantém os tokens; sem linha, nada muda. */
+    @Override
+    public boolean zerarContadores(UUID usuarioId, LocalDate data) {
+        var chave = new Chave(usuarioId, data);
+        var atual = usos.get(chave);
+        boolean tinhaJulia = mensagensJulia.containsKey(chave);
+        if (atual == null && !tinhaJulia) {
+            return false;
+        }
+        if (atual != null) {
+            salvar(new UsoIADiario(atual.id(), usuarioId, data, atual.tokensEntrada(), atual.tokensSaida(),
+                    0, atual.qtdRoadmaps(), 0));
+        }
+        mensagensJulia.computeIfPresent(chave, (c, qtd) -> 0);
+        return true;
+    }
 }

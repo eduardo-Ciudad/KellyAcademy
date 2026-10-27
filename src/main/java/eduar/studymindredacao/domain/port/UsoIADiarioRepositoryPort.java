@@ -36,4 +36,12 @@ public interface UsoIADiarioRepositoryPort {
 
     /** Perguntas à Júlia feitas pelo aluno no dia (0 se ainda não há linha), para mostrar quantas restam. */
     int contarMensagensJulia(UUID usuarioId, LocalDate data);
+
+    /**
+     * Ação do admin: zera correções, transcrições e perguntas à Júlia do aluno no dia. Os tokens ficam (são custo
+     * real) e o contador global do sistema não muda.
+     *
+     * @return true se havia linha do dia para zerar
+     */
+    boolean zerarContadores(UUID usuarioId, LocalDate data);
 }

@@ -21,6 +21,9 @@ public interface TokenUsuarioRepositoryPort {
     /** Marca como usados os tokens ainda válidos do usuário nesse tipo (ex.: antes de reenviar o link). */
     int invalidarAtivos(UUID usuarioId, TipoTokenUsuario tipo, OffsetDateTime agora);
 
+    /** Quando foi gerado o último token desse tipo para o usuário (usado ou não); vazio se nunca houve. */
+    Optional<OffsetDateTime> ultimaEmissao(UUID usuarioId, TipoTokenUsuario tipo);
+
     /** Apaga os tokens expirados ou usados antes do corte. Retorna quantos foram apagados. */
     int excluirAntigos(OffsetDateTime corte);
 }

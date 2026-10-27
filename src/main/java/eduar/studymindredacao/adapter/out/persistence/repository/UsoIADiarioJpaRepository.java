@@ -11,6 +11,16 @@ import java.util.Optional;
 import java.util.UUID;
 
 interface UsoIADiarioJpaRepository extends JpaRepository<UsoIADiarioEntity, UUID> {
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE uso_ia_diario
+               SET qtd_correcoes = 0,
+                   qtd_transcricoes = 0,
+                   qtd_mensagens_julia = 0
+             WHERE usuario_id = :usuarioId AND data = :data
+            """, nativeQuery = true)
+    int zerarContadores(@Param("usuarioId") UUID usuarioId, @Param("data") LocalDate data);
     Optional<UsoIADiarioEntity> findByUsuario_IdAndData(UUID usuarioId, LocalDate data);
 
 

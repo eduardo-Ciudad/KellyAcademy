@@ -19,12 +19,17 @@ public class ConcessaoProRepositoryAdapter implements ConcessaoProRepositoryPort
         this.repository = repository;
     }
 
+    /**
+     * Com flush na hora, de propósito: ao conceder, a vencida é fechada (UPDATE) e a nova inserida (INSERT) na mesma
+     * transação. No flush o Hibernate roda os INSERTs antes dos UPDATEs, e o índice único da concessão aberta
+     * barraria a nova. Também faz uma violação do índice estourar aqui, e não só no commit.
+     */
     @Override
     @Transactional
     public ConcessaoPro salvar(ConcessaoPro concessao) {
         Objects.requireNonNull(concessao, "concessao é obrigatória");
         var entity = ConcessaoProPersistenceMapper.toEntity(concessao);
-        return ConcessaoProPersistenceMapper.toDomain(repository.save(entity));
+        return ConcessaoProPersistenceMapper.toDomain(repository.saveAndFlush(entity));
     }
 
     @Override

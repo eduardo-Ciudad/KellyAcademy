@@ -1,6 +1,7 @@
 package eduar.studymindredacao.adapter.out.persistence.repository;
 
 import eduar.studymindredacao.adapter.out.persistence.entity.TokenUsuarioEntity;
+import eduar.studymindredacao.domain.model.enums.TipoTokenUsuario;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -48,6 +49,10 @@ interface TokenUsuarioJpaRepository extends JpaRepository<TokenUsuarioEntity, UU
             @Param("tipo") String tipo,
             @Param("agora") OffsetDateTime agora
     );
+
+    // JPQL (não nativo): o tipo do max vem da entity, OffsetDateTime, sem depender do que o driver devolve
+    @Query("SELECT max(t.criadoEm) FROM TokenUsuarioEntity t WHERE t.usuarioId = :usuarioId AND t.tipo = :tipo")
+    Optional<OffsetDateTime> ultimaEmissao(@Param("usuarioId") UUID usuarioId, @Param("tipo") TipoTokenUsuario tipo);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "DELETE FROM tokens_usuario WHERE expira_em < :corte OR usado_em < :corte", nativeQuery = true)

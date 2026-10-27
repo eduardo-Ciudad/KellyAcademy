@@ -63,4 +63,12 @@ class TokenUsuarioRepositoryEmMemoria implements TokenUsuarioRepositoryPort {
         tokens.put(t.id(), new TokenUsuario(t.id(), t.usuarioId(), t.tipo(), t.tokenHash(),
                 t.criadoEm(), t.expiraEm(), agora));
     }
+
+    @Override
+    public Optional<OffsetDateTime> ultimaEmissao(UUID usuarioId, TipoTokenUsuario tipo) {
+        return tokens.values().stream()
+                .filter(t -> t.usuarioId().equals(usuarioId) && t.tipo() == tipo)
+                .map(TokenUsuario::criadoEm)
+                .max(OffsetDateTime::compareTo);
+    }
 }

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -104,5 +105,13 @@ public class UsoIADiarioRepositoryAdapter implements UsoIADiarioRepositoryPort {
     @Transactional(readOnly = true)
     public int contarMensagensJulia(UUID usuarioId, LocalDate data) {
         return repository.contarMensagensJulia(usuarioId, data);
+    }
+
+    @Override
+    @Transactional
+    public boolean zerarContadores(UUID usuarioId, LocalDate data) {
+        Objects.requireNonNull(usuarioId, "usuarioId é obrigatório");
+        Objects.requireNonNull(data, "data é obrigatória");
+        return repository.zerarContadores(usuarioId, data) > 0;
     }
 }
