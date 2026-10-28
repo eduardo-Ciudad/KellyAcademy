@@ -15,7 +15,8 @@ public final class TemaPersistenceMapper {
                 entity.getOrigem(),
                 entity.getAno(),
                 entity.getAtivo(),
-                entity.getCriadoEm()
+                entity.getCriadoEm(),
+                entity.getCriadoPorId()
         );
     }
 
@@ -28,6 +29,7 @@ public final class TemaPersistenceMapper {
         entity.setAno(domain.ano());
         entity.setAtivo(domain.ativo());
         entity.setCriadoEm(domain.criadoEm());
+        entity.setCriadoPorId(domain.criadoPorId());
         return entity;
     }
 }

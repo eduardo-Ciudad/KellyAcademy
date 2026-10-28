@@ -15,7 +15,8 @@ class TemaRepositoryEmMemoria implements TemaRepositoryPort {
     @Override
     public Tema salvar(Tema tema) {
         UUID id = tema.id() != null ? tema.id() : UUID.randomUUID();
-        var salvo = new Tema(id, tema.titulo(), tema.textosMotivadores(), tema.origem(), tema.ano(), tema.ativo(), tema.criadoEm());
+        var salvo = new Tema(id, tema.titulo(), tema.textosMotivadores(), tema.origem(), tema.ano(), tema.ativo(), tema.criadoEm(),
+                tema.criadoPorId());
         temas.put(id, salvo);
         return salvo;
     }

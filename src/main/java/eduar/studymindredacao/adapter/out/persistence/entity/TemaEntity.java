@@ -45,4 +45,8 @@ public class TemaEntity {
     @CreationTimestamp
     @Column(name = "criado_em", nullable = false, updatable = false)
     private OffsetDateTime criadoEm;
+
+    /** Só nos temas PERSONALIZADO (V26). */
+    @Column(name = "criado_por_id", updatable = false)
+    private UUID criadoPorId;
 }
