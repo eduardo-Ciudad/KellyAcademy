@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 @Service
 public class ListarTemasService {
@@ -23,11 +24,14 @@ public class ListarTemasService {
         return temaRepository.listarAtivos();
     }
 
-    /** Temas oficiais e autorais ativos, mais os temas possíveis que este aluno adicionou à lista. */
+    /**
+     * Os temas personalizados do aluno primeiro (mais recentes antes), depois os oficiais e autorais ativos
+     * e os temas possíveis que ele adicionou à lista.
+     */
     public List<Tema> listarDisponiveis(UUID usuarioId) {
         var adicionados = usuarioTemaRepository.listarTemaIds(usuarioId);
-        return temaRepository.listarAtivos().stream()
-                .filter(t -> t.origem() != OrigemTema.PREVISAO || adicionados.contains(t.id()))
-                .toList();
+        var doSistema = temaRepository.listarAtivos().stream()
+                .filter(t -> t.origem() != OrigemTema.PREVISAO || adicionados.contains(t.id()));
+        return Stream.concat(temaRepository.listarPersonalizadosAtivosDo(usuarioId).stream(), doSistema).toList();
     }
 }

@@ -218,6 +218,28 @@ class EnviarRedacaoServiceTest {
     }
 
     @Test
+    void corrigeComTemaPersonalizadoDoProprioAluno() {
+        var meu = temas.salvar(Tema.personalizado("Os desafios da mobilidade urbana", alunoId));
+
+        var detalhada = service.enviar(alunoId, meu.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO);
+
+        assertThat(detalhada.redacao().status()).isEqualTo(StatusRedacao.AVALIADA);
+        assertThat(chamadasIA).singleElement()
+                .satisfies(s -> assertThat(s.tema()).isEqualTo("Os desafios da mobilidade urbana"));
+    }
+
+    @Test
+    void rejeitaTemaPersonalizadoDeOutroAlunoSemGastarVaga() {
+        var doOutro = temas.salvar(Tema.personalizado("Tema digitado por outro aluno", UUID.randomUUID()));
+
+        assertThatThrownBy(() -> service.enviar(alunoId, doOutro.id(), TipoRedacao.PRATICA, TEXTO, OrigemRedacao.DIGITADO))
+                .isInstanceOf(TemaNaoEncontradoException.class);
+        assertThat(uso.buscarPorUsuarioIdEData(alunoId, HOJE_EM_SP)).isEmpty();
+        assertThat(chamadasIA).isEmpty();
+        assertThat(redacoes.listarPorUsuarioId(alunoId)).isEmpty();
+    }
+
+    @Test
     void rejeitaTextoAcimaDoLimiteSemGastarVaga() {
         String longo = "a".repeat(EnviarRedacaoService.TAMANHO_MAXIMO_TEXTO + 1);
 

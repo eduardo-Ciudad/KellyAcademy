@@ -47,4 +47,25 @@ class ListarTemasServiceTest {
 
         assertThat(service.listarDisponiveis(aluno)).isEmpty();
     }
+
+    @Test
+    void disponiveisTrazemOsPersonalizadosDoAlunoPrimeiroESoOsDele() {
+        UUID aluno = UUID.randomUUID();
+        UUID outroAluno = UUID.randomUUID();
+        temas.salvar(new Tema(null, "Oficial", null, OrigemTema.ENEM_OFICIAL, (short) 2024, true, null));
+        var meu = temas.salvar(Tema.personalizado("Meu tema digitado aqui", aluno));
+        temas.salvar(Tema.personalizado("Tema digitado pelo outro", outroAluno));
+
+        var disponiveis = service.listarDisponiveis(aluno);
+
+        assertThat(disponiveis).extracting(Tema::titulo).containsExactly(meu.titulo(), "Oficial");
+    }
+
+    @Test
+    void listarAtivosNaoTrazPersonalizados() {
+        temas.salvar(new Tema(null, "Oficial", null, OrigemTema.ENEM_OFICIAL, (short) 2024, true, null));
+        temas.salvar(Tema.personalizado("Meu tema digitado aqui", UUID.randomUUID()));
+
+        assertThat(service.listarAtivos()).extracting(Tema::titulo).containsExactly("Oficial");
+    }
 }

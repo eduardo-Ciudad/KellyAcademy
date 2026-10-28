@@ -69,6 +69,8 @@ public class EnviarRedacaoService {
         validarTexto(texto);
         var tema = temaRepository.buscarPorId(temaId)
                 .filter(t -> Boolean.TRUE.equals(t.ativo()))
+                // Tema personalizado de outro aluno: mesma resposta de inexistente, para não revelar que existe
+                .filter(t -> t.visivelPara(usuarioId))
                 .orElseThrow(() -> new TemaNaoEncontradoException(temaId));
 
         try (var permissao = limitador.adquirir(usuarioId, RecursoIA.CORRECAO)) {
