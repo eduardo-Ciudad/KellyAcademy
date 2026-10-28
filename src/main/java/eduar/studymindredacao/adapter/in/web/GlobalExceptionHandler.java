@@ -13,6 +13,7 @@ import eduar.studymindredacao.domain.exception.AcaoAdminConflitoException;
 import eduar.studymindredacao.domain.exception.AcessoAdminNegadoException;
 import eduar.studymindredacao.domain.exception.ConcessaoProConflitoException;
 import eduar.studymindredacao.domain.exception.LimiteDiarioAtingidoException;
+import eduar.studymindredacao.domain.exception.LimiteTemasPersonalizadosException;
 import eduar.studymindredacao.domain.exception.ReenvioMuitoRecenteException;
 import eduar.studymindredacao.domain.exception.UsuarioNaoEncontradoException;
 import eduar.studymindredacao.domain.exception.LimiteGlobalAtingidoException;
@@ -63,6 +64,7 @@ public class GlobalExceptionHandler {
     static final String CODIGO_JULIA_LIMITE_DIARIO = "JULIA_LIMITE_DIARIO";
     static final String CODIGO_JULIA_LIMITE_GLOBAL = "JULIA_LIMITE_GLOBAL";
     static final String CODIGO_JULIA_INDISPONIVEL = "JULIA_INDISPONIVEL";
+    static final String CODIGO_LIMITE_TEMAS_PERSONALIZADOS = "LIMITE_TEMAS_PERSONALIZADOS";
     static final String MENSAGEM_JULIA_INDISPONIVEL =
             "A Júlia não conseguiu responder agora. Sua pergunta não foi descontada. Tente novamente em instantes.";
 
@@ -158,6 +160,17 @@ public class GlobalExceptionHandler {
         var problema = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
         problema.setProperty("limite", ex.getLimite());
         problema.setProperty("recurso", ex.getRecurso().name());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(segundosAteAmanha()))
+                .body(problema);
+    }
+
+    // Tema digitado: 429 + Retry-After até a meia-noite; o código separa este 429 do limite de correções
+    @ExceptionHandler(LimiteTemasPersonalizadosException.class)
+    public ResponseEntity<ProblemDetail> limiteTemasPersonalizados(LimiteTemasPersonalizadosException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_LIMITE_TEMAS_PERSONALIZADOS);
+        problema.setProperty("limite", ex.getLimite());
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(segundosAteAmanha()))
                 .body(problema);
