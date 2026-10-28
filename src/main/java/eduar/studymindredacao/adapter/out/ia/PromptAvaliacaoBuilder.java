@@ -19,7 +19,8 @@ public class PromptAvaliacaoBuilder {
 
     private static final String RECURSO = "prompts/avaliacao-v3.txt";
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{(tema|texto|dados_texto)}}");
-    private static final Pattern TAG_REDACAO = Pattern.compile("(?i)</?redacao>");
+    /** Tags que delimitam o tema e o texto do aluno: nenhum dos dois pode abrir ou fechar esses blocos. */
+    private static final Pattern TAGS_DO_PROMPT = Pattern.compile("(?i)</?\\s*(redacao|tema)\\s*>");
 
     private final String template;
 
@@ -78,7 +79,7 @@ public class PromptAvaliacaoBuilder {
     }
 
     private static String neutralizar(String valor) {
-        return TAG_REDACAO.matcher(valor).replaceAll("");
+        return TAGS_DO_PROMPT.matcher(valor).replaceAll("");
     }
 
     private static String carregarTemplate() {
