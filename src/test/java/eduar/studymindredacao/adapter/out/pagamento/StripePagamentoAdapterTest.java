@@ -81,6 +81,35 @@ class StripePagamentoAdapterTest {
     }
 
     @Nested
+    class ParametrosDoPortal {
+        private final com.stripe.param.billingportal.SessionCreateParams params =
+                StripePagamentoAdapter.montarParametrosPortal("cus_abc", CONFIG);
+
+        @Test
+        void abreOPortalDoClienteDoAluno() {
+            assertThat(params.getCustomer()).isEqualTo("cus_abc");
+        }
+
+        @Test
+        void voltaParaPlanosSemBarraDuplaEComMarcaDeRetorno() {
+            // CONFIG tem frontendUrl com barra no fim: o ConfiguracaoStripe tira
+            assertThat(params.getReturnUrl()).isEqualTo("https://kellyacademy.com.br/planos?portal=retorno");
+        }
+
+        @Test
+        void portalEmPortugues() {
+            assertThat(params.getLocale())
+                    .isEqualTo(com.stripe.param.billingportal.SessionCreateParams.Locale.PT_BR);
+        }
+
+        @Test
+        void naoFixaConfiguracaoDoPortal() {
+            // Usa a configuração padrão do Dashboard (sem troca de plano, cancela no fim do período)
+            assertThat(params.getConfiguration()).isNull();
+        }
+    }
+
+    @Nested
     class Webhook {
         private final StripePagamentoAdapter adapter =
                 new StripePagamentoAdapter(new StripeClient("sk_test_falsa"), CONFIG);

@@ -4,6 +4,7 @@ import eduar.studymindredacao.domain.exception.PagamentoIndisponivelException;
 import eduar.studymindredacao.domain.model.EstadoAssinaturaStripe;
 import eduar.studymindredacao.domain.model.EventoWebhook;
 import eduar.studymindredacao.domain.model.SessaoCheckout;
+import eduar.studymindredacao.domain.model.SessaoPortal;
 import eduar.studymindredacao.domain.model.SolicitacaoCheckout;
 import eduar.studymindredacao.domain.port.PagamentoGatewayPort;
 
@@ -20,6 +21,11 @@ public class PagamentoDesligadoAdapter implements PagamentoGatewayPort {
 
     @Override
     public SessaoCheckout criarSessaoCheckout(SolicitacaoCheckout solicitacao) {
+        throw desligado();
+    }
+
+    @Override
+    public SessaoPortal criarSessaoPortal(String stripeCustomerId) {
         throw desligado();
     }
 

@@ -17,6 +17,7 @@ import eduar.studymindredacao.domain.exception.WebhookInvalidoException;
 import eduar.studymindredacao.domain.model.EstadoAssinaturaStripe;
 import eduar.studymindredacao.domain.model.EventoWebhook;
 import eduar.studymindredacao.domain.model.SessaoCheckout;
+import eduar.studymindredacao.domain.model.SessaoPortal;
 import eduar.studymindredacao.domain.model.SolicitacaoCheckout;
 import eduar.studymindredacao.domain.model.enums.CicloAssinatura;
 import eduar.studymindredacao.domain.port.PagamentoGatewayPort;
@@ -71,6 +72,19 @@ public class StripePagamentoAdapter implements PagamentoGatewayPort {
             log.warn("Stripe recusou criar a sessão de checkout do usuário {}: {}",
                     solicitacao.usuarioId(), e.getCode());
             throw new PagamentoIndisponivelException("Não foi possível iniciar o pagamento agora", e);
+        }
+    }
+
+    @Override
+    public SessaoPortal criarSessaoPortal(String stripeCustomerId) {
+        Objects.requireNonNull(stripeCustomerId, "stripeCustomerId");
+        var params = montarParametrosPortal(stripeCustomerId, config);
+        try {
+            var sessao = client.v1().billingPortal().sessions().create(params);
+            return new SessaoPortal(sessao.getId(), sessao.getUrl());
+        } catch (StripeException e) {
+            log.warn("Stripe recusou criar a sessão do portal do cliente {}: {}", stripeCustomerId, e.getCode());
+            throw new PagamentoIndisponivelException("Não foi possível abrir o gerenciamento da assinatura agora", e);
         }
     }
 
@@ -146,6 +160,21 @@ public class StripePagamentoAdapter implements PagamentoGatewayPort {
                 // Identificadores do Checkout Studio (fixed_by_ui), enviados crus: não dependem de setter no SDK
                 .putExtraParam("integration_identifier", "hosted_web_0001")
                 .putExtraParam("origin_context", "web")
+                .build();
+    }
+
+    /**
+     * O que o portal permite (cancelar no fim do período, trocar cartão, faturas, sem troca de plano) fica na
+     * configuração padrão do portal no Dashboard do Stripe, não aqui.
+     */
+    static com.stripe.param.billingportal.SessionCreateParams montarParametrosPortal(
+            String stripeCustomerId,
+            ConfiguracaoStripe config
+    ) {
+        return com.stripe.param.billingportal.SessionCreateParams.builder()
+                .setCustomer(stripeCustomerId)
+                .setReturnUrl(config.frontendUrl() + "/planos?portal=retorno")
+                .setLocale(com.stripe.param.billingportal.SessionCreateParams.Locale.PT_BR)
                 .build();
     }
 

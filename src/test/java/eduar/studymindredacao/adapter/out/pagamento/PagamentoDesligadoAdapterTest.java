@@ -14,6 +14,8 @@ class PagamentoDesligadoAdapterTest {
     void todoUsoRespondeIndisponivel() {
         assertThatThrownBy(() -> adapter.criarCliente(UUID.randomUUID(), "Ana", "a@x.com"))
                 .isInstanceOf(PagamentoIndisponivelException.class);
+        assertThatThrownBy(() -> adapter.criarSessaoPortal("cus_abc"))
+                .isInstanceOf(PagamentoIndisponivelException.class);
         assertThatThrownBy(() -> adapter.validarEvento("{}", "t=1"))
                 .isInstanceOf(PagamentoIndisponivelException.class);
         assertThatThrownBy(() -> adapter.buscarAssinatura("sub_1"))
