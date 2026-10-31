@@ -2,8 +2,10 @@ package eduar.studymindredacao.adapter.in.web;
 
 import eduar.studymindredacao.adapter.in.web.dto.CheckoutRequest;
 import eduar.studymindredacao.adapter.in.web.dto.CheckoutResponse;
+import eduar.studymindredacao.adapter.in.web.dto.PortalResponse;
 import eduar.studymindredacao.adapter.in.web.security.LimitadorDeTentativas;
 import eduar.studymindredacao.adapter.in.web.security.UsuarioAutenticado;
+import eduar.studymindredacao.application.usecase.AbrirPortalAssinaturaService;
 import eduar.studymindredacao.application.usecase.IniciarCheckoutService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,10 +24,16 @@ public class AssinaturaController {
     static final Duration JANELA_TENTATIVAS = Duration.ofMinutes(15);
 
     private final IniciarCheckoutService iniciarCheckout;
+    private final AbrirPortalAssinaturaService abrirPortal;
     private final LimitadorDeTentativas limitador;
 
-    public AssinaturaController(IniciarCheckoutService iniciarCheckout, LimitadorDeTentativas limitador) {
+    public AssinaturaController(
+            IniciarCheckoutService iniciarCheckout,
+            AbrirPortalAssinaturaService abrirPortal,
+            LimitadorDeTentativas limitador
+    ) {
         this.iniciarCheckout = iniciarCheckout;
+        this.abrirPortal = abrirPortal;
         this.limitador = limitador;
     }
 
@@ -37,5 +45,12 @@ public class AssinaturaController {
         limitador.consumir("checkout:" + usuario.id(), TENTATIVAS_POR_USUARIO, JANELA_TENTATIVAS);
         var sessao = iniciarCheckout.iniciar(usuario.id(), request.ciclo());
         return new CheckoutResponse(sessao.url());
+    }
+
+    /** Portal do cliente do Stripe. Chave própria no limitador: cliques em "assinar" não bloqueiam o portal. */
+    @PostMapping("/portal")
+    public PortalResponse portal(@AuthenticationPrincipal UsuarioAutenticado usuario) {
+        limitador.consumir("portal:" + usuario.id(), TENTATIVAS_POR_USUARIO, JANELA_TENTATIVAS);
+        return new PortalResponse(abrirPortal.abrir(usuario.id()).url());
     }
 }

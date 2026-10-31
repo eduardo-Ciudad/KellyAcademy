@@ -2,6 +2,7 @@ package eduar.studymindredacao.adapter.in.web;
 
 import eduar.studymindredacao.adapter.in.web.security.TentativasExcedidasException;
 import eduar.studymindredacao.domain.exception.AssinaturaExistenteException;
+import eduar.studymindredacao.domain.exception.SemClientePagamentoException;
 import eduar.studymindredacao.domain.exception.AvaliacaoIAException;
 import eduar.studymindredacao.domain.exception.CadastroFechadoException;
 import eduar.studymindredacao.domain.exception.CredenciaisInvalidasException;
@@ -58,6 +59,7 @@ public class GlobalExceptionHandler {
     static final String CODIGO_SENHA_ATUAL_INCORRETA = "SENHA_ATUAL_INCORRETA";
     static final String CODIGO_ASSINATURA_EXISTENTE = "ASSINATURA_EXISTENTE";
     static final String CODIGO_PAGAMENTO_INDISPONIVEL = "PAGAMENTO_INDISPONIVEL";
+    static final String CODIGO_SEM_CLIENTE_PAGAMENTO = "SEM_CLIENTE_PAGAMENTO";
     static final String CODIGO_PLANO_PRO = "PLANO_PRO_NECESSARIO";
     static final String CODIGO_JULIA_SEM_CORRECAO = "JULIA_SEM_CORRECAO";
     static final String CODIGO_JULIA_LIMITE_CONVERSA = "JULIA_LIMITE_CONVERSA";
@@ -267,6 +269,14 @@ public class GlobalExceptionHandler {
     public ProblemDetail assinaturaExistente(AssinaturaExistenteException ex) {
         var problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problema.setProperty("codigo", CODIGO_ASSINATURA_EXISTENTE);
+        return problema;
+    }
+
+    // 409 com código: o front esconde "Gerenciar assinatura" e mostra o botão de assinar
+    @ExceptionHandler(SemClientePagamentoException.class)
+    public ProblemDetail semClientePagamento(SemClientePagamentoException ex) {
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problema.setProperty("codigo", CODIGO_SEM_CLIENTE_PAGAMENTO);
         return problema;
     }
 

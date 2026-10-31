@@ -2,15 +2,19 @@ package eduar.studymindredacao.adapter.in.web;
 
 import eduar.studymindredacao.adapter.in.web.security.LimitadorDeTentativas;
 import eduar.studymindredacao.adapter.in.web.security.SecurityConfig;
+import eduar.studymindredacao.application.usecase.AbrirPortalAssinaturaService;
 import eduar.studymindredacao.application.usecase.IniciarCheckoutService;
 import eduar.studymindredacao.application.usecase.ValidarSessaoService;
 import eduar.studymindredacao.domain.exception.AssinaturaExistenteException;
 import eduar.studymindredacao.domain.exception.PagamentoIndisponivelException;
+import eduar.studymindredacao.domain.exception.SemClientePagamentoException;
 import eduar.studymindredacao.domain.model.DadosToken;
 import eduar.studymindredacao.domain.model.SessaoCheckout;
+import eduar.studymindredacao.domain.model.SessaoPortal;
 import eduar.studymindredacao.domain.model.enums.CicloAssinatura;
 import eduar.studymindredacao.domain.model.enums.Role;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -38,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * POST /assinaturas/checkout com a SecurityConfig e o LimitadorDeTentativas reais. Cada teste usa um usuário
+ * POST /assinaturas/checkout e /assinaturas/portal com a SecurityConfig e o LimitadorDeTentativas reais. Cada teste usa um usuário
  * próprio, porque o limitador é compartilhado.
  */
 @WebMvcTest(AssinaturaController.class)
@@ -59,6 +63,8 @@ class AssinaturaControllerTest {
 
     @MockitoBean
     private IniciarCheckoutService iniciarCheckout;
+    @MockitoBean
+    private AbrirPortalAssinaturaService abrirPortal;
     @MockitoBean
     private ValidarSessaoService validarSessao;
 
@@ -144,5 +150,78 @@ class AssinaturaControllerTest {
         }
         mvc.perform(checkout("{\"ciclo\":\"MENSAL\"}"))
                 .andExpect(status().isTooManyRequests());
+    }
+
+    @Nested
+    class Portal {
+        private static final String URL_PORTAL = "https://billing.stripe.com/p/session/test_1";
+
+        private MockHttpServletRequestBuilder portal() {
+            return post("/assinaturas/portal").header(HttpHeaders.AUTHORIZATION, "Bearer " + jwt);
+        }
+
+        @Test
+        void semLoginResponde401SemChamarOStripe() throws Exception {
+            mvc.perform(post("/assinaturas/portal"))
+                    .andExpect(status().isUnauthorized());
+
+            verify(abrirPortal, never()).abrir(any());
+        }
+
+        @Test
+        void devolveAUrlDoPortalDoUsuarioDoToken() throws Exception {
+            when(abrirPortal.abrir(usuarioId)).thenReturn(new SessaoPortal("bps_test_1", URL_PORTAL));
+
+            mvc.perform(portal())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.url").value(URL_PORTAL))
+                    .andExpect(jsonPath("$.id").doesNotExist());
+
+            verify(abrirPortal).abrir(usuarioId);
+        }
+
+        @Test
+        void semClienteNoStripeResponde409ComCodigo() throws Exception {
+            when(abrirPortal.abrir(usuarioId)).thenThrow(new SemClientePagamentoException());
+
+            mvc.perform(portal())
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.codigo").value("SEM_CLIENTE_PAGAMENTO"));
+        }
+
+        @Test
+        void stripeForaDoArResponde503SemVazarODetalhe() throws Exception {
+            when(abrirPortal.abrir(usuarioId))
+                    .thenThrow(new PagamentoIndisponivelException("cus_abc sem configuração de portal", null));
+
+            mvc.perform(portal())
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.codigo").value("PAGAMENTO_INDISPONIVEL"))
+                    .andExpect(jsonPath("$.detail").value(not(containsString("cus_abc"))));
+        }
+
+        @Test
+        void limitaTentativasPorUsuario() throws Exception {
+            when(abrirPortal.abrir(usuarioId)).thenReturn(new SessaoPortal("bps_test_1", URL_PORTAL));
+
+            for (int i = 0; i < AssinaturaController.TENTATIVAS_POR_USUARIO; i++) {
+                mvc.perform(portal()).andExpect(status().isOk());
+            }
+            mvc.perform(portal())
+                    .andExpect(status().isTooManyRequests());
+        }
+
+        @Test
+        void limiteDoCheckoutNaoBloqueiaOPortal() throws Exception {
+            when(iniciarCheckout.iniciar(usuarioId, CicloAssinatura.MENSAL))
+                    .thenReturn(new SessaoCheckout("cs_test_1", URL));
+            when(abrirPortal.abrir(usuarioId)).thenReturn(new SessaoPortal("bps_test_1", URL_PORTAL));
+            for (int i = 0; i < AssinaturaController.TENTATIVAS_POR_USUARIO; i++) {
+                mvc.perform(checkout("{\"ciclo\":\"MENSAL\"}")).andExpect(status().isOk());
+            }
+            mvc.perform(checkout("{\"ciclo\":\"MENSAL\"}")).andExpect(status().isTooManyRequests());
+
+            mvc.perform(portal()).andExpect(status().isOk());
+        }
     }
 }
