@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "StudyMind Redação — Pagamento (Stripe)",
-    "description": "Passo 9: teste de ponta a ponta do checkout e do webhook com o Stripe em modo de teste.\n\nAntes de rodar:\n1. `stripe listen --forward-to localhost:8080/webhooks/stripe` aberto (conta Área restrita de ciudadlab).\n2. API no ar com PAGAMENTO_HABILITADO=true e as variáveis do Stripe.\n3. Preencha `email` e `senha` com uma conta sua JÁ VERIFICADA (variáveis da collection).\n\nRode na ordem, uma requisição por vez (não pelo Runner): depois do item 2 você paga no navegador com o cartão 4242 4242 4242 4242 e só então segue para o 3.",
+    "description": "Teste de ponta a ponta do pagamento: checkout, webhook, plano e portal do cliente (Stripe em modo de teste).\n\nAntes de rodar:\n1. `stripe listen --forward-to localhost:8080/webhooks/stripe` aberto (conta Área restrita de ciudadlab) e o whsec_ dele em STRIPE_WEBHOOK_SECRET.\n2. API no ar com PAGAMENTO_HABILITADO=true e as variáveis do Stripe.\n3. Preencha `email` e `senha` com uma conta JÁ VERIFICADA que nunca assinou e não tem Pro dado pelo admin. Para a pasta 14, preencha `emailConcessao` e `senhaConcessao`.\n\nRode na ordem, uma requisição por vez (não pelo Runner): os itens 4, 7, 9 e 11 pedem uma ação no navegador ou no Dashboard antes do item seguinte.\nO limitador (10 chamadas a cada 15 min por usuário em /assinaturas/checkout e em /assinaturas/portal, separados) já é coberto pelos testes automatizados.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -23,6 +23,22 @@
     },
     {
       "key": "checkoutUrl",
+      "value": ""
+    },
+    {
+      "key": "portalUrl",
+      "value": ""
+    },
+    {
+      "key": "emailConcessao",
+      "value": ""
+    },
+    {
+      "key": "senhaConcessao",
+      "value": ""
+    },
+    {
+      "key": "tokenConcessao",
       "value": ""
     }
   ],
@@ -76,7 +92,91 @@
       ]
     },
     {
-      "name": "2. Checkout mensal (abrir a URL e pagar)",
+      "name": "2. Plano antes de assinar (GRATIS)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me/plano",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me",
+            "plano"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Use uma conta que nunca assinou e sem Pro dado pelo admin."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"Plano GRATIS\", () => pm.expect(p.plano).to.eql(\"GRATIS\"));",
+              "pm.test(\"Sem origem e sem assinatura\", () => { pm.expect(p.origem).to.eql(null); pm.expect(p.assinatura).to.eql(null); });",
+              "pm.test(\"Limites do Grátis (3 correções, 2 transcrições)\", () => pm.expect(p.limites).to.eql({ correcoesPorDia: 3, transcricoesPorDia: 2 }));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Portal sem cliente no Stripe (409)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/assinaturas/portal",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "assinaturas",
+            "portal"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Conta que nunca passou pelo checkout: não há o que gerenciar."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+              "pm.test(\"Código SEM_CLIENTE_PAGAMENTO\", () => pm.expect(pm.response.json().codigo).to.eql(\"SEM_CLIENTE_PAGAMENTO\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Checkout mensal (abrir a URL e pagar)",
       "request": {
         "method": "POST",
         "header": [
@@ -133,7 +233,53 @@
       ]
     },
     {
-      "name": "3. Checkout de novo depois de pagar (409)",
+      "name": "5. Plano depois de pagar (PRO)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me/plano",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me",
+            "plano"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Rode depois que o stripe listen mostrar os eventos do pagamento com [200]."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"Plano PRO\", () => pm.expect(p.plano).to.eql(\"PRO\"));",
+              "pm.test(\"Origem ASSINATURA\", () => pm.expect(p.origem).to.eql(\"ASSINATURA\"));",
+              "pm.test(\"cancelarNoFimDoPeriodo = false\", () => pm.expect(p.assinatura.cancelarNoFimDoPeriodo).to.eql(false));",
+              "pm.test(\"Limites do Pro (10 correções, 10 transcrições)\", () => pm.expect(p.limites).to.eql({ correcoesPorDia: 10, transcricoesPorDia: 10 }));",
+              "console.log(\"Período atual até:\", p.assinatura.periodoAtualFim);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Checkout de novo depois de pagar (409)",
       "request": {
         "method": "POST",
         "header": [
@@ -187,7 +333,274 @@
       ]
     },
     {
-      "name": "4. Checkout anual depois de cancelar (200)",
+      "name": "7. Abrir portal e CANCELAR (200)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/assinaturas/portal",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "assinaturas",
+            "portal"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Abra o `portalUrl` no navegador e confira: em português, histórico de faturas, cartão, sem troca de plano e sem editar dados. Depois clique em Cancelar assinatura, escolha um motivo e confirme. No stripe listen deve aparecer customer.subscription.updated com [200]. Por fim clique em voltar: deve ir para /planos?portal=retorno."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test(\"URL do portal do Stripe\", () => pm.expect(body.url).to.match(/^https:\\/\\/billing\\.stripe\\.com\\//));",
+              "pm.test(\"Não expõe o id da sessão\", () => pm.expect(body.id).to.eql(undefined));",
+              "pm.collectionVariables.set(\"portalUrl\", body.url);",
+              "console.log(\"Abra no navegador:\", body.url);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Plano depois de cancelar no portal (PRO até o fim do período)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me/plano",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me",
+            "plano"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Continua Pro até o fim do período pago; cancelarNoFimDoPeriodo vira true."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"Plano PRO\", () => pm.expect(p.plano).to.eql(\"PRO\"));",
+              "pm.test(\"Origem ASSINATURA\", () => pm.expect(p.origem).to.eql(\"ASSINATURA\"));",
+              "pm.test(\"cancelarNoFimDoPeriodo = true\", () => pm.expect(p.assinatura.cancelarNoFimDoPeriodo).to.eql(true));",
+              "pm.test(\"Limites do Pro (10 correções, 10 transcrições)\", () => pm.expect(p.limites).to.eql({ correcoesPorDia: 10, transcricoesPorDia: 10 }));",
+              "console.log(\"Período atual até:\", p.assinatura.periodoAtualFim);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Abrir portal e REATIVAR (200)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/assinaturas/portal",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "assinaturas",
+            "portal"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Abra o `portalUrl` e clique em Renovar assinatura. No stripe listen: customer.subscription.updated com [200]."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test(\"URL do portal do Stripe\", () => pm.expect(body.url).to.match(/^https:\\/\\/billing\\.stripe\\.com\\//));",
+              "pm.test(\"Não expõe o id da sessão\", () => pm.expect(body.id).to.eql(undefined));",
+              "pm.collectionVariables.set(\"portalUrl\", body.url);",
+              "console.log(\"Abra no navegador:\", body.url);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Plano depois de reativar (PRO renovando)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me/plano",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me",
+            "plano"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"Plano PRO\", () => pm.expect(p.plano).to.eql(\"PRO\"));",
+              "pm.test(\"Origem ASSINATURA\", () => pm.expect(p.origem).to.eql(\"ASSINATURA\"));",
+              "pm.test(\"cancelarNoFimDoPeriodo = false\", () => pm.expect(p.assinatura.cancelarNoFimDoPeriodo).to.eql(false));",
+              "pm.test(\"Limites do Pro (10 correções, 10 transcrições)\", () => pm.expect(p.limites).to.eql({ correcoesPorDia: 10, transcricoesPorDia: 10 }));",
+              "console.log(\"Período atual até:\", p.assinatura.periodoAtualFim);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Plano depois de encerrar pelo Dashboard (GRATIS)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/usuarios/me/plano",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "usuarios",
+            "me",
+            "plano"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Antes de rodar: no Dashboard (Área restrita) abra Clientes → este aluno → assinatura → Cancelar assinatura → Imediatamente (ou `stripe subscriptions cancel sub_...`). No stripe listen: customer.subscription.deleted com [200]."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"Plano GRATIS\", () => pm.expect(p.plano).to.eql(\"GRATIS\"));",
+              "pm.test(\"Sem origem e sem assinatura\", () => { pm.expect(p.origem).to.eql(null); pm.expect(p.assinatura).to.eql(null); });",
+              "pm.test(\"Limites do Grátis (3 correções, 2 transcrições)\", () => pm.expect(p.limites).to.eql({ correcoesPorDia: 3, transcricoesPorDia: 2 }));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Portal do ex-assinante (200, só faturas)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/assinaturas/portal",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "assinaturas",
+            "portal"
+          ]
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "description": "Ex-assinante ainda abre o portal para ver e baixar as faturas antigas."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test(\"URL do portal do Stripe\", () => pm.expect(body.url).to.match(/^https:\\/\\/billing\\.stripe\\.com\\//));",
+              "pm.test(\"Não expõe o id da sessão\", () => pm.expect(body.id).to.eql(undefined));",
+              "pm.collectionVariables.set(\"portalUrl\", body.url);",
+              "console.log(\"Abra no navegador:\", body.url);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Checkout anual depois de encerrar (200)",
       "request": {
         "method": "POST",
         "header": [
@@ -225,7 +638,7 @@
             }
           ]
         },
-        "description": "Antes, cancele a assinatura: stripe subscriptions cancel sub_... (o id está no log da API ou no Dashboard). Deve abrir o checkout de R$ 252,00/ano reaproveitando o mesmo cliente do Stripe."
+        "description": "Só depois do item 11 (assinatura encerrada). Deve abrir o checkout de R$ 252,00/ano reaproveitando o mesmo cliente do Stripe. Não precisa pagar."
       },
       "event": [
         {
@@ -242,7 +655,140 @@
       ]
     },
     {
-      "name": "5. Erros",
+      "name": "14. Pro por concessão do admin (sem Stripe)",
+      "item": [
+        {
+          "name": "Login (conta com Pro concedido)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailConcessao}}\",\n  \"senha\": \"{{senhaConcessao}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Preencha emailConcessao/senhaConcessao com uma conta que recebeu Pro pelo painel admin e nunca assinou."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set(\"tokenConcessao\", body.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Plano (PRO por CONCESSAO)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/usuarios/me/plano",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "usuarios",
+                "me",
+                "plano"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenConcessao}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "pm.test(\"PRO por CONCESSAO, sem assinatura\", () => { pm.expect(p.plano).to.eql(\"PRO\"); pm.expect(p.origem).to.eql(\"CONCESSAO\"); pm.expect(p.assinatura).to.eql(null); pm.expect(p.concessao.fim).to.be.a(\"string\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Portal (409, não tem assinatura para gerenciar)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/assinaturas/portal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assinaturas",
+                "portal"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenConcessao}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Código SEM_CLIENTE_PAGAMENTO\", () => pm.expect(pm.response.json().codigo).to.eql(\"SEM_CLIENTE_PAGAMENTO\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "15. Erros",
       "item": [
         {
           "name": "Ciclo inválido (400)",
@@ -376,6 +922,37 @@
                   "language": "json"
                 }
               }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Portal sem login (401)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/assinaturas/portal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assinaturas",
+                "portal"
+              ]
             },
             "auth": {
               "type": "noauth"
